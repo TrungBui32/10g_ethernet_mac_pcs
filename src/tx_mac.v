@@ -316,11 +316,11 @@ module tx_mac #(
                     end
                     
                     FCS_STATE: begin
-                        out_xgmii_data <= {crc_out[7:0], crc_out[15:8], crc_out[23:16], crc_out[31:24]};
+                        out_xgmii_data <= {crc_out[7:0], crc_out[15:8], crc_out[23:16], crc_out[31:24]};		// consider add crc_finish signal
                         out_xgmii_ctl <= 4'b0000;
                         crc_enable <= 1'b0;
                         byte_counter <= 0;
-                        next_state <= IFG_STATE;
+                        next_state <= TERMINATE_STATE;
                         frame_byte_count <= frame_byte_count + 4;
                     end
                     
