@@ -67,7 +67,6 @@ module tx_mac #(
     reg [FIFO_DATA_WIDTH-1:0] fifo_wr_data;
     wire fifo_empty;
     wire fifo_full;
-    wire fifo_almost_empty;
     wire [AXIS_DATA_WIDTH-1:0] fifo_tdata;
     wire [AXIS_DATA_BYTES-1:0] fifo_tkeep;
     
@@ -124,7 +123,7 @@ module tx_mac #(
             payload_length <= 0;
         end else begin 
             fifo_wr_en <= 1'b0;
-            out_slave_tx_tready <= !fifo_full && !fifo_almost_empty; 
+            out_slave_tx_tready <= !fifo_full; 
             if (frame_complete_clear) begin
                 frame_complete <= 1'b0;
             end
@@ -369,7 +368,6 @@ module tx_mac #(
         .rd_data(fifo_rd_data),
         .full(fifo_full),
         .empty(fifo_empty),
-        .almost_empty(fifo_almost_empty)
     );
     
     slicing_crc #(

@@ -64,7 +64,6 @@ module rx_mac #(
     reg [FIFO_DATA_WIDTH-1:0] fifo_wr_data;
     wire fifo_empty;
     wire fifo_full;
-    wire fifo_almost_full;
     
     reg frame_in_progress;
     reg frame_receiving;
@@ -407,7 +406,6 @@ module rx_mac #(
         .rd_data(fifo_rd_data),
         .full(fifo_full),
         .empty(fifo_empty),
-        .almost_full(fifo_almost_full)
     );
     
     slicing_crc #(
