@@ -1,5 +1,5 @@
 module tx_mac #(
-    parameter AXIS_DATA_WIDTH = 64,
+    parameter AXIS_DATA_WIDTH = 32,
     parameter AXIS_DATA_BYTES = AXIS_DATA_WIDTH/8,
     parameter XGMII_DATA_WIDTH = 32,
     parameter XGMII_DATA_BYTES = XGMII_DATA_WIDTH/8
@@ -273,48 +273,21 @@ module tx_mac #(
                         end
                         
                         if (data_valid) begin
-                            case (data_byte_index)
-                                0: begin
-                                    out_xgmii_data <= current_data[31:0];
-                                    crc_data_in <= current_data[31:0];
-                                    crc_valid_in <= current_keep[3:0];
+                            out_xgmii_data <= current_data;
+                            crc_data_in <= current_data;
+                            crc_valid_in <= current_keep;
+                            data_valid <= 1'b1;
                                     
-                                    if (AXIS_DATA_WIDTH == 32 || current_keep[7:4] == 4'b0000) begin
-                                        data_valid <= 1'b0;
-                                        if (!last_word && !fifo_empty) begin
-                                            fifo_rd_en <= 1'b1;
-                                        end else begin
-                                            if (pad_bytes_required > 0) begin
-                                                next_state <= PAD_STATE;
-                                                byte_counter <= 0;
-                                            end else begin
-                                                next_state <= FCS_STATE;
-                                                crc_enable <= 1'b0;
-                                            end
-                                        end
-                                    end else begin
-                                        data_byte_index <= 4;
-                                    end
+                            if (!last_word && !fifo_empty) begin
+                                fifo_rd_en <= 1'b1;
+							end else begin
+                                if (pad_bytes_required > 0) begin
+                                    next_state <= PAD_STATE;
+                                end else begin
+                                    next_state <= FCS_STATE;
+                                    crc_enable <= 1'b0;
                                 end
-                                4: begin
-                                    out_xgmii_data <= current_data[63:32];
-                                    crc_data_in <= current_data[63:32];
-                                    crc_valid_in <= current_keep[7:4];
-                                    data_valid <= 1'b0;
-                                    
-                                    if (!last_word && !fifo_empty) begin
-                                        fifo_rd_en <= 1'b1;
-                                    end else begin
-                                        if (pad_bytes_required > 0) begin
-                                            next_state <= PAD_STATE;
-                                            byte_counter <= 0;
-                                        end else begin
-                                            next_state <= FCS_STATE;
-                                            crc_enable <= 1'b0;
-                                        end
-                                    end
-                                end
-                            endcase
+							end
                         end
                         frame_byte_count <= frame_byte_count + 4;
                     end
