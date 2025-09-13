@@ -191,7 +191,7 @@ module tx_mac #(
                         data_valid <= 1'b0;
                         data_byte_index <= 0;
                         fifo_rd_en <= 1'b0;
-                        if (frame_complete && !frame_error && !fifo_empty) begin		// should add a signal when fifo add finish
+                        if (frame_complete && !frame_error && !fifo_empty) begin		// consider add a signal check fifo working (controversal due to continuos insertion)
                             next_state <= PREAMBLE_STATE;
                             frame_complete_clear <= 1'b1; 
                         end
@@ -352,8 +352,8 @@ module tx_mac #(
                     end
                     
 					TERMINATE_STATE: begin
-						out_xgmii_data <= 
-						out_xgmii_ctl <= 
+						out_xgmii_data <= {{3{XGMII_IDLE}}, XGMII_TERMINATE};
+						out_xgmii_ctl <= 4'b1111;
 						next_state <= IFG_STATE;
 						frame_byte_count <= frame_byte_count + 1;
 					end
