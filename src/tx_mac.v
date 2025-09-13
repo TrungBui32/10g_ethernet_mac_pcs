@@ -53,8 +53,9 @@ module tx_mac #(
     localparam [3:0] PAYLOAD_STATE = 4'd3;
     localparam [3:0] PAD_STATE = 4'd4;
     localparam [3:0] FCS_STATE = 4'd5;
-    localparam [3:0] IFG_STATE = 4'd6;
-    localparam [3:0] ERROR_STATE = 4'd7;
+	localparam [3:0] TERMINATE_STATE = 4'd6;
+    localparam [3:0] IFG_STATE = 4'd7;
+    localparam [3:0] ERROR_STATE = 4'd8;
     
     reg [3:0] current_state, next_state;
     reg [11:0] byte_counter;
@@ -135,11 +136,13 @@ module tx_mac #(
                     payload_length <= 0;
                     frame_error <= 1'b0;
                 end
+				
                 for (i = 0; i < AXIS_DATA_BYTES; i = i + 1) begin
                     if (in_slave_tx_tkeep[i]) begin
                         payload_length <= payload_length + 1;
                     end
                 end
+				
                 if (in_slave_tx_tlast) begin
                     frame_in_progress <= 1'b0;
                     frame_complete <= 1'b1;
@@ -188,7 +191,7 @@ module tx_mac #(
                         data_valid <= 1'b0;
                         data_byte_index <= 0;
                         fifo_rd_en <= 1'b0;
-                        if (frame_complete && !frame_error && !fifo_empty) begin
+                        if (frame_complete && !frame_error && !fifo_empty) begin		// should add a signal when fifo add finish
                             next_state <= PREAMBLE_STATE;
                             frame_complete_clear <= 1'b1; 
                         end
@@ -244,7 +247,7 @@ module tx_mac #(
                                 byte_counter <= 0;
                                 next_state <= PAYLOAD_STATE;
                                 
-                                if (!fifo_empty) begin
+                                if (!fifo_empty) begin 			// consider add condition !fifo_in_progress or add finished
                                     fifo_rd_en <= 1'b1;
                                 end else if (pad_bytes_required > 0) begin
                                     next_state <= PAD_STATE;
@@ -348,6 +351,13 @@ module tx_mac #(
                         frame_byte_count <= frame_byte_count + 4;
                     end
                     
+					TERMINATE_STATE: begin
+						out_xgmii_data <= 
+						out_xgmii_ctl <= 
+						next_state <= IFG_STATE;
+						frame_byte_count <= frame_byte_count + 1;
+					end
+					
                     IFG_STATE: begin
                         out_xgmii_data <= {XGMII_DATA_BYTES{XGMII_IDLE}};
                         out_xgmii_ctl <= {XGMII_DATA_BYTES{1'b1}};
