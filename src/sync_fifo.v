@@ -1,6 +1,6 @@
 module sync_fifo #(
 	parameter DATA_WIDTH = 36,
-	parameter ADDR_WIDTH = 4,
+	parameter ADDR_WIDTH = 2,
 	parameter FIFO_DEPTH = 1 << ADDR_WIDTH
 	) (
 	input clk,
@@ -10,7 +10,7 @@ module sync_fifo #(
 	input rd_en,
 	output reg [DATA_WIDTH-1:0] rd_data,
 	output empty,
-	output full,
+	output full
 	);
 	
 	reg [ADDR_WIDTH:0] count;
