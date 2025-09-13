@@ -1,5 +1,5 @@
 module sync_fifo #(
-	parameter DATA_WIDTH = 52,
+	parameter DATA_WIDTH = 36,
 	parameter ADDR_WIDTH = 4,
 	parameter FIFO_DEPTH = 1 << ADDR_WIDTH
 	) (
@@ -11,8 +11,6 @@ module sync_fifo #(
 	output reg [DATA_WIDTH-1:0] rd_data,
 	output empty,
 	output full,
-	output reg almost_full,
-	output reg almost_empty
 	);
 	
 	reg [ADDR_WIDTH:0] count;
@@ -29,13 +27,7 @@ module sync_fifo #(
 			rd_ptr_reg <= 0;
 			count <= 0;
 			rd_data <= 0;
-			almost_full <= 1'b0;
 		end else begin
-		    if(count >= FIFO_DEPTH/2) begin
-		      almost_full <= 1'b1;
-		    end else if (count < FIFO_DEPTH/2) begin
-		      almost_empty <= 1'b1;
-		    end
 			if(wr_en && !full) begin
 				mem[wr_ptr_reg] <= wr_data;
 				wr_ptr_reg <= (wr_ptr_reg + 1) & (FIFO_DEPTH-1);
