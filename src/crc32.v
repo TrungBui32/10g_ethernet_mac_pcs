@@ -1,5 +1,5 @@
 module crc32 #(
-    parameter SLICE_LENGTH = 8,
+    parameter SLICE_LENGTH = 4,
     parameter INITIAL_CRC = 32'hFFFFFFFF,
     parameter INVERT_OUTPUT = 1,
     parameter REGISTER_OUTPUT = 1,
@@ -74,3 +74,4 @@ module crc32 #(
     assign crc_out = REGISTER_OUTPUT ? prev_crc : crc_calc;
     assign out_crc = INVERT_OUTPUT ? ~crc_out : crc_out;
 endmodule
+
