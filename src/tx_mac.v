@@ -90,7 +90,6 @@ module tx_mac #(
     reg crc_reset;
     reg [31:0] crc_data_in;
     reg [3:0] crc_valid_in;
-    reg crc_enable;
     
     reg [7:0] mac_header [0:MAC_HEADER_SIZE-1];
     initial begin
@@ -167,7 +166,6 @@ module tx_mac #(
             out_xgmii_ctl <= {XGMII_DATA_BYTES{1'b1}};
             fifo_rd_en <= 1'b0;
             crc_reset <= 1'b1;
-            crc_enable <= 1'b0;
             current_data <= 0;
             current_keep <= 0;
             data_valid <= 1'b0;
@@ -186,7 +184,6 @@ module tx_mac #(
                         byte_counter <= 0;
                         frame_byte_count <= 0;
                         crc_reset <= 1'b1;
-                        crc_enable <= 1'b0;
                         data_valid <= 1'b0;
                         data_byte_index <= 0;
                         fifo_rd_en <= 1'b0;
@@ -211,13 +208,11 @@ module tx_mac #(
                                 byte_counter <= 0;
                                 next_state <= MAC_HEADER_STATE;
                                 crc_reset <= 1'b0; 
-                                crc_enable <= 1'b1;
                             end
                         endcase
                     end
                     
                     MAC_HEADER_STATE: begin
-                        crc_enable <= 1'b1;
                         out_xgmii_ctl <= 4'b0000;
                         
                         case (byte_counter)
@@ -259,7 +254,6 @@ module tx_mac #(
                     end
                     
                     PAYLOAD_STATE: begin
-                        crc_enable <= 1'b1;
                         out_xgmii_ctl <= 4'b0000;
                         
                         if (fifo_rd_en) begin
@@ -284,7 +278,6 @@ module tx_mac #(
                                     next_state <= PAD_STATE;
                                 end else begin
                                     next_state <= FCS_STATE;
-                                    crc_enable <= 1'b0;
                                 end
 							end
                         end
@@ -292,7 +285,6 @@ module tx_mac #(
                     end
                     
                     PAD_STATE: begin
-                        crc_enable <= 1'b1;
                         out_xgmii_ctl <= 4'b0000;
                         out_xgmii_data <= 32'h00000000;
                         crc_data_in <= 32'h00000000;
@@ -305,7 +297,6 @@ module tx_mac #(
                                 default: crc_valid_in <= 4'b1111;
                             endcase
                             next_state <= FCS_STATE;
-                            crc_enable <= 1'b0;
                             byte_counter <= 0;
                         end else begin
                             crc_valid_in <= 4'b1111;
@@ -317,7 +308,6 @@ module tx_mac #(
                     FCS_STATE: begin
                         out_xgmii_data <= {crc_out[7:0], crc_out[15:8], crc_out[23:16], crc_out[31:24]};		// consider add crc_finish signal
                         out_xgmii_ctl <= 4'b0000;
-                        crc_enable <= 1'b0;
                         byte_counter <= 0;
                         next_state <= TERMINATE_STATE;
                         frame_byte_count <= frame_byte_count + 4;
