@@ -370,17 +370,17 @@ module tx_mac #(
         .empty(fifo_empty),
     );
     
-    slicing_crc #(
+    crc32 #(
         .SLICE_LENGTH(4),
         .INITIAL_CRC(32'hFFFFFFFF),    
         .INVERT_OUTPUT(1),             
         .REGISTER_OUTPUT(0)           
-    ) ethernet_crc (
-        .i_clk(tx_clk),
-        .i_reset(crc_reset),
-        .i_data(crc_data_in),
-        .i_valid(crc_valid_in),
-        .o_crc(crc_out)
+    ) crc (
+        .clk(tx_clk),
+        .reset(crc_reset),
+        .in_data(crc_data_in),
+        .in_valid(crc_valid_in),
+        .out_crc(crc_out)
     );
     
 endmodule
