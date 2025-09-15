@@ -357,7 +357,7 @@ module tx_mac #(
         .rd_en(fifo_rd_en),
         .rd_data(fifo_rd_data),
         .full(fifo_full),
-        .empty(fifo_empty),
+        .empty(fifo_empty)
     );
     
     crc32 #(
