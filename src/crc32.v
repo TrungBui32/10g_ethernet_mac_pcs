@@ -39,7 +39,7 @@ module crc32 #(
     wire [31:0] crc_out;
     
     always @(posedge clk) begin
-        if (rst) begin
+        if (!rst) begin
             prev_crc <= INITIAL_CRC;
         end else if (any_valid) begin
             prev_crc <= crc_calc;
