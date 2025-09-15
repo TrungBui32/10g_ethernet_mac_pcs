@@ -367,7 +367,7 @@ module tx_mac #(
         .REGISTER_OUTPUT(0)           
     ) crc (
         .clk(tx_clk),
-        .reset(crc_reset),
+        .rst(crc_reset),
         .in_data(crc_data_in),
         .in_valid(crc_valid_in),
         .out_crc(crc_out)
