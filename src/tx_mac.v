@@ -223,8 +223,8 @@ module tx_mac #(
                         case (byte_counter)
                             0: begin
                                 out_xgmii_data <= {mac_header[2], mac_header[1], mac_header[0], SFD_BYTE};
-                                crc_data_in <= {mac_header[2], mac_header[1], mac_header[0], SFD_BYTE};
-                                crc_valid_in <= 4'b1111;
+                                crc_data_in <= {mac_header[2], mac_header[1], mac_header[0], 8'h00};
+                                crc_valid_in <= 4'b1110;
                                 byte_counter <= byte_counter + 4;
                             end 
                             4: begin
