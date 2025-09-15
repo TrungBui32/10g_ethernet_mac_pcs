@@ -83,7 +83,6 @@ module rx_mac #(
     reg crc_reset;
     reg [31:0] crc_data_in;
     reg [3:0] crc_valid_in;
-    reg crc_enable;
     reg [31:0] received_crc;
     reg [3:0] crc_byte_count;
     
@@ -123,7 +122,6 @@ module rx_mac #(
             error_found <= 1'b0;
             payload_length <= 0;
             crc_reset <= 1'b1;
-            crc_enable <= 1'b0;
             crc_byte_count <= 0;
             received_crc <= 0;
             mac_header_index <= 0;
@@ -157,7 +155,6 @@ module rx_mac #(
                     preamble_count <= 0;
                     payload_length <= 0;
                     crc_reset <= 1'b1;
-                    crc_enable <= 1'b0;
                     crc_byte_count <= 0;
                     received_crc <= 0;
                     mac_header_index <= 0;
@@ -196,7 +193,6 @@ module rx_mac #(
                                     next_state <= MAC_HEADER_STATE;
                                     byte_counter <= (byte_counter + i + 1) % XGMII_DATA_BYTES;
                                     crc_reset <= 1'b0; 
-                                    crc_enable <= 1'b1;
                                 end else begin
                                     next_state <= ERROR_STATE;
                                     error_found <= 1'b1;
@@ -222,7 +218,6 @@ module rx_mac #(
                 end
                 
                 MAC_HEADER_STATE: begin
-                    crc_enable <= 1'b1;
                     error_detected <= 1'b0;
                     for (i = 0; i < XGMII_DATA_BYTES; i = i + 1) begin
                         if (!error_detected) begin
@@ -265,7 +260,6 @@ module rx_mac #(
                 end
                 
                 PAYLOAD_STATE: begin
-                    crc_enable <= 1'b1;
                     fifo_wr_en <= 1'b0;
                     terminate_detected <= 1'b0;
                     error_detected <= 1'b0;
@@ -314,7 +308,6 @@ module rx_mac #(
                 end
                 
                 FCS_STATE: begin
-                    crc_enable <= 1'b0;
                     if (byte_counter >= 4) begin
                         for (i = 0; i < 4; i = i + 1) begin
                             received_crc[i*8 +: 8] <= in_xgmii_data[(byte_counter - 4 + i)*8 +: 8];
