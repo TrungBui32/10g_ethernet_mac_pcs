@@ -57,7 +57,7 @@ module tx_mac #(
     localparam [3:0] IFG_STATE = 4'd7;
     localparam [3:0] ERROR_STATE = 4'd8;
     
-    reg [3:0] current_state, next_state;
+    reg [3:0] current_state;
     reg [11:0] byte_counter;
     reg [15:0] frame_byte_count;
     
@@ -82,8 +82,8 @@ module tx_mac #(
     
     reg [AXIS_DATA_WIDTH-1:0] current_data;
     reg [AXIS_DATA_BYTES-1:0] current_keep;
+    reg current_valid;
     reg data_valid;
-    reg [3:0] data_byte_index;
     reg last_word;
     
     wire [31:0] crc_out;
@@ -120,6 +120,7 @@ module tx_mac #(
             frame_complete <= 1'b0;
             frame_error <= 1'b0;
             payload_length <= 0;
+            pad_bytes_required <= 0;
         end else begin 
             fifo_wr_en <= 1'b0;
             out_slave_tx_tready <= !fifo_full; 
@@ -137,7 +138,7 @@ module tx_mac #(
 				
                 for (i = 0; i < AXIS_DATA_BYTES; i = i + 1) begin
                     if (in_slave_tx_tkeep[i]) begin
-                        payload_length <= payload_length + 1;
+                        payload_length = payload_length + 1;
                     end
                 end
 				
@@ -159,7 +160,6 @@ module tx_mac #(
     always @(posedge tx_clk) begin
         if (!tx_rst) begin 
             current_state <= IDLE_STATE;
-            next_state <= IDLE_STATE;
             byte_counter <= 0;
             frame_byte_count <= 0;
             out_xgmii_data <= {XGMII_DATA_BYTES{XGMII_IDLE}};
@@ -169,11 +169,9 @@ module tx_mac #(
             current_data <= 0;
             current_keep <= 0;
             data_valid <= 1'b0;
-            data_byte_index <= 0;
             last_word <= 1'b0;
             frame_complete_clear <= 1'b0;
         end else begin 
-            current_state <= next_state;
             frame_complete_clear <= 1'b0; 
             
             if (in_xgmii_pcs_ready) begin
@@ -185,10 +183,9 @@ module tx_mac #(
                         frame_byte_count <= 0;
                         crc_reset <= 1'b1;
                         data_valid <= 1'b0;
-                        data_byte_index <= 0;
                         fifo_rd_en <= 1'b0;
                         if (frame_complete && !frame_error && !fifo_empty) begin		// consider add a signal check fifo working (controversal due to continuos insertion)
-                            next_state <= PREAMBLE_STATE;
+                            current_state <= PREAMBLE_STATE;
                             frame_complete_clear <= 1'b1; 
                         end
                     end
@@ -206,8 +203,8 @@ module tx_mac #(
                                 out_xgmii_data <= {4{PREAMBLE_BYTE}};
                                 out_xgmii_ctl <= 4'b0000; 
                                 byte_counter <= 0;
-                                next_state <= MAC_HEADER_STATE;
                                 crc_reset <= 1'b0; 
+                                current_state <= MAC_HEADER_STATE;
                             end
                         endcase
                     end
@@ -233,20 +230,27 @@ module tx_mac #(
                                 crc_data_in <= {mac_header[10], mac_header[9], mac_header[8], mac_header[7]};
                                 crc_valid_in <= 4'b1111;
                                 byte_counter <= byte_counter + 4;
+                                
+                                if(!fifo_empty) begin
+                                    fifo_rd_en <= 1'b1;
+                                end
                             end
                             12: begin
                                 out_xgmii_data <= {8'h00, mac_header[13], mac_header[12], mac_header[11]};
                                 crc_data_in <= {8'h00, mac_header[13], mac_header[12], mac_header[11]};
                                 crc_valid_in <= 4'b0111;
                                 byte_counter <= 0;
-                                next_state <= PAYLOAD_STATE;
                                 
-                                if (!fifo_empty) begin 			// consider add condition !fifo_in_progress or add finished
-                                    fifo_rd_en <= 1'b1;
+                                if (fifo_rd_en) begin 			// consider add condition !fifo_in_progress or add finished
+                                    fifo_rd_en <= !fifo_empty;
+                                    current_state <= PAYLOAD_STATE;
+                                    data_valid <= 1'b1;
                                 end else if (pad_bytes_required > 0) begin
-                                    next_state <= PAD_STATE;
+                                    fifo_rd_en <= 1'b0;
+                                    current_state <= PAD_STATE;
                                 end else begin
-                                    next_state <= FCS_STATE;
+                                    fifo_rd_en <= 1'b0;
+                                    current_state <= FCS_STATE;
                                 end
                             end
                         endcase
@@ -256,28 +260,20 @@ module tx_mac #(
                     PAYLOAD_STATE: begin
                         out_xgmii_ctl <= 4'b0000;
                         
-                        if (fifo_rd_en) begin
-                            current_data <= fifo_tdata;
-                            current_keep <= fifo_tkeep;
-                            data_valid <= 1'b1;
-                            data_byte_index <= 0;
-                            fifo_rd_en <= 1'b0;
-                            last_word <= fifo_empty; 
-                        end
-                        
                         if (data_valid) begin
-                            out_xgmii_data <= current_data;
-                            crc_data_in <= current_data;
-                            crc_valid_in <= current_keep;
-                            data_valid <= 1'b1;
-                                    
-                            if (!last_word && !fifo_empty) begin
+                            out_xgmii_data <= fifo_tdata;
+                            crc_data_in <= fifo_tdata;
+                            crc_valid_in <= fifo_tkeep;
+                               
+                            if (!fifo_empty) begin
                                 fifo_rd_en <= 1'b1;
 							end else begin
+							    fifo_rd_en <= 1'b0; 
+							    data_valid <= 1'b0; 
                                 if (pad_bytes_required > 0) begin
-                                    next_state <= PAD_STATE;
+                                    current_state <= PAD_STATE;
                                 end else begin
-                                    next_state <= FCS_STATE;
+                                    current_state <= FCS_STATE;
                                 end
 							end
                         end
@@ -296,7 +292,7 @@ module tx_mac #(
                                 3: crc_valid_in <= 4'b0111;
                                 default: crc_valid_in <= 4'b1111;
                             endcase
-                            next_state <= FCS_STATE;
+                            current_state <= FCS_STATE;
                             byte_counter <= 0;
                         end else begin
                             crc_valid_in <= 4'b1111;
@@ -309,15 +305,16 @@ module tx_mac #(
                         out_xgmii_data <= {crc_out[7:0], crc_out[15:8], crc_out[23:16], crc_out[31:24]};		// consider add crc_finish signal
                         out_xgmii_ctl <= 4'b0000;
                         byte_counter <= 0;
-                        next_state <= TERMINATE_STATE;
                         frame_byte_count <= frame_byte_count + 4;
+                        current_state <= TERMINATE_STATE;
+                        crc_valid_in <= 4'b0000;
                     end
                     
 					TERMINATE_STATE: begin
 						out_xgmii_data <= {{3{XGMII_IDLE}}, XGMII_TERMINATE};
 						out_xgmii_ctl <= 4'b1111;
-						next_state <= IFG_STATE;
 						frame_byte_count <= frame_byte_count + 1;
+						current_state <= IFG_STATE;
 					end
 					
                     IFG_STATE: begin
@@ -325,7 +322,7 @@ module tx_mac #(
                         out_xgmii_ctl <= {XGMII_DATA_BYTES{1'b1}};
                         
                         if (byte_counter >= IFG_SIZE - 4) begin
-                            next_state <= IDLE_STATE;
+                            current_state <= IDLE_STATE;
                             byte_counter <= 0;
                         end else begin
                             byte_counter <= byte_counter + 4;
@@ -335,11 +332,11 @@ module tx_mac #(
                     ERROR_STATE: begin
                         out_xgmii_data <= {{3{XGMII_IDLE}}, XGMII_ERROR};
                         out_xgmii_ctl <= 4'b1001;
-                        next_state <= IDLE_STATE;
                         frame_error <= 1'b0;
                     end
                     
-                    default: next_state <= IDLE_STATE;
+                    default: 
+                        current_state <= IDLE_STATE;
                 endcase
             end 
         end
