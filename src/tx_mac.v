@@ -12,7 +12,7 @@ module tx_mac #(
     input [AXIS_DATA_BYTES-1:0] in_slave_tx_tkeep,
     input in_slave_tx_tvalid,
     input in_slave_tx_tlast,
-    output reg out_slave_tx_tready,
+    output out_slave_tx_tready,
     
     // XGMII
     output reg [XGMII_DATA_WIDTH-1:0] out_xgmii_data,
@@ -72,6 +72,7 @@ module tx_mac #(
     
     assign fifo_tdata = fifo_rd_data[AXIS_DATA_WIDTH-1:0];
     assign fifo_tkeep = fifo_rd_data[FIFO_DATA_WIDTH-1:AXIS_DATA_WIDTH];
+    assign out_slave_tx_tready = !fifo_full; 
     
     reg frame_in_progress;
     reg frame_complete;
@@ -90,6 +91,8 @@ module tx_mac #(
     reg crc_reset;
     reg [31:0] crc_data_in;
     reg [3:0] crc_valid_in;
+    
+    reg compute_padding;
     
     reg [7:0] mac_header [0:MAC_HEADER_SIZE-1];
     initial begin
@@ -113,7 +116,6 @@ module tx_mac #(
     
     always @(posedge tx_clk) begin
         if (!tx_rst) begin 
-            out_slave_tx_tready <= 1'b0;
             fifo_wr_en <= 1'b0;
             fifo_wr_data <= 0;
             frame_in_progress <= 1'b0;
@@ -121,37 +123,44 @@ module tx_mac #(
             frame_error <= 1'b0;
             payload_length <= 0;
             pad_bytes_required <= 0;
+            compute_padding <= 0;
         end else begin 
             fifo_wr_en <= 1'b0;
-            out_slave_tx_tready <= !fifo_full; 
             if (frame_complete_clear) begin
                 frame_complete <= 1'b0;
+            end
+            if(compute_padding) begin
+                if (payload_length < MIN_PAYLOAD_SIZE) begin
+                    pad_bytes_required <= MIN_PAYLOAD_SIZE - payload_length[7:0];
+                end else if (payload_length > MAX_PAYLOAD_SIZE) begin
+                    frame_error <= 1'b1; 
+                end else begin
+                    pad_bytes_required <= 0;
+                end
+                compute_padding <= 0;
+                payload_length <= 0;
             end
             if (out_slave_tx_tready && in_slave_tx_tvalid) begin
                 fifo_wr_en <= 1'b1;
                 fifo_wr_data <= {in_slave_tx_tkeep, in_slave_tx_tdata};
                 if (!frame_in_progress) begin
                     frame_in_progress <= 1'b1;
-                    payload_length <= 0;
+//                    payload_length <= 0;
                     frame_error <= 1'b0;
                 end
 				
-                for (i = 0; i < AXIS_DATA_BYTES; i = i + 1) begin
-                    if (in_slave_tx_tkeep[i]) begin
-                        payload_length = payload_length + 1;
-                    end
-                end
+                case(in_slave_tx_tkeep)
+                    4'b1111: payload_length <= payload_length + 4;
+                    4'b1110: payload_length <= payload_length + 3;
+                    4'b1100: payload_length <= payload_length + 2;
+                    4'b1000: payload_length <= payload_length + 1;
+                    default: payload_length <= payload_length;
+                endcase
 				
                 if (in_slave_tx_tlast) begin
                     frame_in_progress <= 1'b0;
                     frame_complete <= 1'b1;
-                    if (payload_length < MIN_PAYLOAD_SIZE) begin
-                        pad_bytes_required <= MIN_PAYLOAD_SIZE - payload_length[7:0];
-                    end else if (payload_length > MAX_PAYLOAD_SIZE) begin
-                        frame_error <= 1'b1; 
-                    end else begin
-                        pad_bytes_required <= 0;
-                    end
+                    compute_padding <= 1;
                 end
             end
         end
