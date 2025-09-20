@@ -145,7 +145,6 @@ module tx_mac #(
                 fifo_wr_data <= {in_slave_tx_tkeep, in_slave_tx_tdata};
                 if (!frame_in_progress) begin
                     frame_in_progress <= 1'b1;
-//                    payload_length <= 0;
                     frame_error <= 1'b0;
                 end
 				
@@ -193,7 +192,7 @@ module tx_mac #(
                         crc_reset <= 1'b1;
                         data_valid <= 1'b0;
                         fifo_rd_en <= 1'b0;
-                        if (frame_complete && !frame_error && !fifo_empty) begin		// consider add a signal check fifo working (controversal due to continuos insertion)
+                        if (frame_complete && !frame_error && !fifo_empty) begin		
                             current_state <= PREAMBLE_STATE;
                             frame_complete_clear <= 1'b1; 
                         end
@@ -209,7 +208,7 @@ module tx_mac #(
                                 byte_counter <= byte_counter + 4;
                             end
                             4: begin
-                                out_xgmii_data <= {4{PREAMBLE_BYTE}};
+                                out_xgmii_data <= {SFD_BYTE, {3{PREAMBLE_BYTE}}};
                                 out_xgmii_ctl <= 4'b0000; 
                                 byte_counter <= 0;
                                 crc_reset <= 1'b0; 
@@ -223,34 +222,38 @@ module tx_mac #(
                         
                         case (byte_counter)
                             0: begin
-                                out_xgmii_data <= {mac_header[2], mac_header[1], mac_header[0], SFD_BYTE};
+                                out_xgmii_data <= {mac_header[3], mac_header[2], mac_header[1], mac_header[0]};
                                 crc_data_in <= {mac_header[2], mac_header[1], mac_header[0], 8'h00};
-                                crc_valid_in <= 4'b1110;
+                                crc_valid_in <= 4'b1111;
                                 byte_counter <= byte_counter + 4;
+                                frame_byte_count <= frame_byte_count + 4;
                             end 
                             4: begin
-                                out_xgmii_data <= {mac_header[6], mac_header[5], mac_header[4], mac_header[3]};
+                                out_xgmii_data <= {mac_header[7], mac_header[6], mac_header[5], mac_header[4]};
                                 crc_data_in <= {mac_header[6], mac_header[5], mac_header[4], mac_header[3]};
                                 crc_valid_in <= 4'b1111;
                                 byte_counter <= byte_counter + 4;
+                                frame_byte_count <= frame_byte_count + 4;
                             end
                             8: begin
-                                out_xgmii_data <= {mac_header[10], mac_header[9], mac_header[8], mac_header[7]};
+                                out_xgmii_data <= {mac_header[11], mac_header[10], mac_header[9], mac_header[8]};
                                 crc_data_in <= {mac_header[10], mac_header[9], mac_header[8], mac_header[7]};
                                 crc_valid_in <= 4'b1111;
                                 byte_counter <= byte_counter + 4;
+                                frame_byte_count <= frame_byte_count + 4;
                                 
                                 if(!fifo_empty) begin
                                     fifo_rd_en <= 1'b1;
                                 end
                             end
                             12: begin
-                                out_xgmii_data <= {8'h00, mac_header[13], mac_header[12], mac_header[11]};
-                                crc_data_in <= {8'h00, mac_header[13], mac_header[12], mac_header[11]};
-                                crc_valid_in <= 4'b0111;
+                                out_xgmii_data <= {8'h00, 8'h00,  mac_header[13], mac_header[12]};
+                                crc_data_in <= {8'h00, 8'h00,  mac_header[13], mac_header[12]};
+                                crc_valid_in <= 4'b0011;
                                 byte_counter <= 0;
+                                frame_byte_count <= frame_byte_count + 2;
                                 
-                                if (fifo_rd_en) begin 			// consider add condition !fifo_in_progress or add finished
+                                if (fifo_rd_en) begin 			
                                     fifo_rd_en <= !fifo_empty;
                                     current_state <= PAYLOAD_STATE;
                                     data_valid <= 1'b1;
@@ -263,7 +266,6 @@ module tx_mac #(
                                 end
                             end
                         endcase
-                        frame_byte_count <= frame_byte_count + 4;
                     end
                     
                     PAYLOAD_STATE: begin
@@ -311,7 +313,7 @@ module tx_mac #(
                     end
                     
                     FCS_STATE: begin
-                        out_xgmii_data <= {crc_out[7:0], crc_out[15:8], crc_out[23:16], crc_out[31:24]};		// consider add crc_finish signal
+                        out_xgmii_data <= {crc_out[7:0], crc_out[15:8], crc_out[23:16], crc_out[31:24]};		
                         out_xgmii_ctl <= 4'b0000;
                         byte_counter <= 0;
                         frame_byte_count <= frame_byte_count + 4;
@@ -322,7 +324,6 @@ module tx_mac #(
 					TERMINATE_STATE: begin
 						out_xgmii_data <= {{3{XGMII_IDLE}}, XGMII_TERMINATE};
 						out_xgmii_ctl <= 4'b1111;
-						frame_byte_count <= frame_byte_count + 1;
 						current_state <= IFG_STATE;
 					end
 					
