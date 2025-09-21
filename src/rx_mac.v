@@ -1,5 +1,5 @@
 module rx_mac #(
-    parameter AXIS_DATA_WIDTH = 64,
+    parameter AXIS_DATA_WIDTH = 32,
     parameter AXIS_DATA_BYTES = AXIS_DATA_WIDTH/8,
     parameter XGMII_DATA_WIDTH = 32,
     parameter XGMII_DATA_BYTES = XGMII_DATA_WIDTH/8
@@ -53,7 +53,7 @@ module rx_mac #(
     localparam [3:0] ERROR_STATE = 4'd6;
     localparam [3:0] DISCARD_STATE = 4'd7;
     
-    reg [3:0] current_state, next_state;
+    reg [3:0] current_state;
     reg [11:0] byte_counter;
     reg [15:0] frame_byte_count;
     reg [3:0] preamble_count;
@@ -64,7 +64,6 @@ module rx_mac #(
     reg [FIFO_DATA_WIDTH-1:0] fifo_wr_data;
     wire fifo_empty;
     wire fifo_full;
-    wire fifo_almost_full;
     
     reg frame_in_progress;
     reg frame_receiving;
@@ -113,7 +112,6 @@ module rx_mac #(
     always @(posedge rx_clk) begin
         if (!rx_rst) begin
             current_state <= IDLE_STATE;
-            next_state <= IDLE_STATE;
             byte_counter <= 0;
             frame_byte_count <= 0;
             preamble_count <= 0;
@@ -144,8 +142,6 @@ module rx_mac #(
             terminate_detected <= 1'b0;
             error_detected <= 1'b0;
         end else begin
-            current_state <= next_state;
-            
             case (current_state)
                 IDLE_STATE: begin
                     frame_in_progress <= 1'b0;
@@ -173,16 +169,19 @@ module rx_mac #(
                     frame_valid <= 1'b0;
                     frame_error <= 1'b0;
                     crc_error <= 1'b0;
-                    start_found <= 1'b0;
-                    
-                    for (i = 0; i < XGMII_DATA_BYTES; i = i + 1) begin
-                        if (!start_found && in_xgmii_ctl[i] && in_xgmii_data[i*8 +: 8] == XGMII_START) begin
-                            next_state <= PREAMBLE_STATE;
-                            frame_in_progress <= 1'b1;
-                            byte_counter <= i + 1; 
-                            start_found <= 1'b1;
-                        end
-                    end
+                    start_found <= 1'b0;	// maybe delete 
+					
+					if(	(in_xgmii_ctl[0] && in_xgmii_data[0:7] == XGMII_START) begin
+						if(	(!in_xgmii_ctl[1] && in_xgmii_data[8:15] == PREAMBLE_BYTE) &&
+							(!in_xgmii_ctl[2] && in_xgmii_data[16:23] == PREAMBLE_BYTE) &&
+							(!in_xgmii_ctl[3] && in_xgmii_data[24:31] == XGMII_START)) begin 
+							current_state <= PREAMBLE_STATE;
+						end else begin
+							frame_error <= 1'b1;
+						end
+					end else begin
+						current_state <= IDLE_STATE;
+					end
                 end
                 
                 PREAMBLE_STATE: begin
