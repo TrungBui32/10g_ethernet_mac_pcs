@@ -74,9 +74,6 @@ module tx_mac #(
     assign fifo_tkeep = fifo_rd_data[FIFO_DATA_WIDTH-1:AXIS_DATA_WIDTH];
     assign out_slave_tx_tready = !fifo_full; 
     
-    reg frame_in_progress;
-    reg frame_complete;
-    reg frame_complete_clear;  
     reg frame_error;
     reg [15:0] payload_length;
     reg [7:0] pad_bytes_required;
@@ -118,17 +115,11 @@ module tx_mac #(
         if (!tx_rst) begin 
             fifo_wr_en <= 1'b0;
             fifo_wr_data <= 0;
-            frame_in_progress <= 1'b0;
-            frame_complete <= 1'b0;
-            frame_error <= 1'b0;
             payload_length <= 0;
             pad_bytes_required <= 0;
             compute_padding <= 0;
         end else begin 
             fifo_wr_en <= 1'b0;
-            if (frame_complete_clear) begin
-                frame_complete <= 1'b0;
-            end
             if(compute_padding) begin
                 if (payload_length < MIN_PAYLOAD_SIZE) begin
                     pad_bytes_required <= MIN_PAYLOAD_SIZE - payload_length[7:0];
@@ -143,10 +134,6 @@ module tx_mac #(
             if (out_slave_tx_tready && in_slave_tx_tvalid) begin
                 fifo_wr_en <= 1'b1;
                 fifo_wr_data <= {in_slave_tx_tkeep, in_slave_tx_tdata};
-                if (!frame_in_progress) begin
-                    frame_in_progress <= 1'b1;
-                    frame_error <= 1'b0;
-                end
 				
                 case(in_slave_tx_tkeep)
                     4'b1111: payload_length <= payload_length + 4;
@@ -157,8 +144,6 @@ module tx_mac #(
                 endcase
 				
                 if (in_slave_tx_tlast) begin
-                    frame_in_progress <= 1'b0;
-                    frame_complete <= 1'b1;
                     compute_padding <= 1;
                 end
             end
@@ -178,9 +163,7 @@ module tx_mac #(
             current_keep <= 0;
             data_valid <= 1'b0;
             last_word <= 1'b0;
-            frame_complete_clear <= 1'b0;
         end else begin 
-            frame_complete_clear <= 1'b0; 
             
             if (in_xgmii_pcs_ready) begin
                 case (current_state)
@@ -194,7 +177,6 @@ module tx_mac #(
                         fifo_rd_en <= 1'b0;
                         if (in_slave_tx_tvalid && out_slave_tx_tready) begin		
                             current_state <= PREAMBLE_STATE;
-                            frame_complete_clear <= 1'b1; 
                         end
                     end
                     
