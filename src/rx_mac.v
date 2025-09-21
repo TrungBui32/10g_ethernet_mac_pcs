@@ -176,6 +176,7 @@ module rx_mac #(
 							(!in_xgmii_ctl[2] && in_xgmii_data[16:23] == PREAMBLE_BYTE) &&
 							(!in_xgmii_ctl[3] && in_xgmii_data[24:31] == XGMII_START)) begin 
 							current_state <= PREAMBLE_STATE;
+							frame_byte_count = frame_byte_count + 4;
 						end else begin
 							frame_error <= 1'b1;
 						end
@@ -186,82 +187,48 @@ module rx_mac #(
                 
                 PREAMBLE_STATE: begin
                     crc_reset <= 1'b1; 
-                    for (i = 0; i < XGMII_DATA_BYTES; i = i + 1) begin
-                        if (byte_counter + i < XGMII_DATA_BYTES && !sfd_found && !error_found) begin
-                            if (!in_xgmii_ctl[byte_counter + i]) begin
-                                if (in_xgmii_data[(byte_counter + i)*8 +: 8] == PREAMBLE_BYTE) begin
-                                    preamble_count <= preamble_count + 1;
-                                end else if (in_xgmii_data[(byte_counter + i)*8 +: 8] == SFD_BYTE) begin
-                                    sfd_found <= 1'b1;
-                                    next_state <= MAC_HEADER_STATE;
-                                    byte_counter <= (byte_counter + i + 1) % XGMII_DATA_BYTES;
-                                    crc_reset <= 1'b0; 
-                                    crc_enable <= 1'b1;
-                                end else begin
-                                    next_state <= ERROR_STATE;
-                                    error_found <= 1'b1;
-                                end
-                            end else begin
-                                if (in_xgmii_data[(byte_counter + i)*8 +: 8] == XGMII_ERROR) begin
-                                    next_state <= ERROR_STATE;
-                                    error_found <= 1'b1;
-                                end
-                            end
-                        end
-                    end
-                    if (preamble_count >= 7 && !sfd_found) begin
-                        next_state <= ERROR_STATE;
-                        alignment_error <= 1'b1;
-                    end
-                    
-                    if (next_state == MAC_HEADER_STATE || next_state == ERROR_STATE) begin
-                        byte_counter <= 0;
-                    end else begin
-                        byte_counter <= (byte_counter + XGMII_DATA_BYTES) % 8;
-                    end
+					
+					if(	(!in_xgmii_ctl[0] && in_xgmii_data[0:7] == PREAMBLE_BYTE) &&
+						(!in_xgmii_ctl[0] && in_xgmii_data[0:7] == PREAMBLE_BYTE) &&
+						(!in_xgmii_ctl[0] && in_xgmii_data[0:7] == PREAMBLE_BYTE) &&
+						(!in_xgmii_ctl[0] && in_xgmii_data[0:7] == PREAMBLE_BYTE)) begin 
+						current_state <= MAC_HEADER_STATE;
+						frame_byte_count = frame_byte_count + 4;
+					end else begin
+						frame_error <= 1'b1;
+					end
                 end
                 
                 MAC_HEADER_STATE: begin
                     crc_enable <= 1'b1;
                     error_detected <= 1'b0;
-                    for (i = 0; i < XGMII_DATA_BYTES; i = i + 1) begin
-                        if (!error_detected) begin
-                            if (!in_xgmii_ctl[i]) begin
-                                if (mac_header_index < MAC_HEADER_SIZE) begin
-                                    mac_header[mac_header_index] <= in_xgmii_data[i*8 +: 8];
-                                    mac_header_index <= mac_header_index + 1;
-                                    crc_data_in[i*8 +: 8] <= in_xgmii_data[i*8 +: 8];
-                                    crc_valid_in[i] <= 1'b1;
-                                end
-                            end else begin
-                                if (in_xgmii_data[i*8 +: 8] == XGMII_ERROR) begin
-                                    next_state <= ERROR_STATE;
-                                    error_found <= 1'b1;
-                                    error_detected <= 1'b1;
-                                end else if (in_xgmii_data[i*8 +: 8] == XGMII_TERMINATE) begin
-                                    next_state <= ERROR_STATE;
-                                    frame_too_short <= 1'b1;
-                                    error_detected <= 1'b1;
-                                end
-                            end
-                        end
-                    end
-                    
-                    frame_byte_count <= frame_byte_count + XGMII_DATA_BYTES;
-                    
-                    if (mac_header_index >= MAC_HEADER_SIZE) begin
-                        mac_header_complete <= 1'b1;
-                        next_state <= PAYLOAD_STATE;
-                        frame_receiving <= 1'b1;
-                        fifo_wr_en <= 1'b1;
-                        if (AXIS_DATA_WIDTH == 32) begin
-                            fifo_wr_data <= {1'b0, 4'b1111, mac_header[3], mac_header[2], mac_header[1], mac_header[0]};
-                        end else begin 
-                            fifo_wr_data <= {1'b0, 8'b11111111, 
-                                           mac_header[7], mac_header[6], mac_header[5], mac_header[4],
-                                           mac_header[3], mac_header[2], mac_header[1], mac_header[0]};
-                        end
-                    end
+					
+					case(byte_counter)
+						0: begin
+							crc_data_in <= in_xgmii_data;
+							crc_valid_in <= 4'b1111;
+							byte_counter <= byte_counter + 4;
+							frame_byte_count <= frame_byte_count + 4;
+						end 
+						4: begin
+							crc_data_in <= in_xgmii_data;
+							crc_valid_in <= 4'b1111;
+							byte_counter <= byte_counter + 4;
+							frame_byte_count <= frame_byte_count + 4;
+						end
+						8: begin
+							crc_data_in <= in_xgmii_data;
+							crc_valid_in <= 4'b1111;
+							byte_counter <= byte_counter + 4;
+							frame_byte_count <= frame_byte_count + 4;
+						end
+						12: begin
+							crc_data_in <= in_xgmii_data;
+							crc_valid_in <= 4'b0011;
+							byte_counter <= 0;
+							frame_byte_count <= frame_byte_count + 2;
+						end						
+					endcase 
                 end
                 
                 PAYLOAD_STATE: begin
