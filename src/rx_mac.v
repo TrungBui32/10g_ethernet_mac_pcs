@@ -41,8 +41,7 @@ module rx_mac #(
     localparam FCS_SIZE = 4;              
     
     localparam FIFO_DATA_WIDTH = AXIS_DATA_WIDTH + AXIS_DATA_BYTES + 1;
-    localparam FIFO_DEPTH = 512; 
-    localparam FIFO_ADDR_WIDTH = $clog2(FIFO_DEPTH);
+    localparam FIFO_ADDR_WIDTH = 1;			// set =1 for terminate detection
     
     localparam [3:0] IDLE_STATE = 4'd0;
     localparam [3:0] PREAMBLE_STATE = 4'd1;
@@ -90,6 +89,13 @@ module rx_mac #(
     reg [7:0] mac_header [0:MAC_HEADER_SIZE-1];
     reg [3:0] mac_header_index;
     reg mac_header_complete;
+	
+	reg [AXIS_DATA_WIDTH-1:0] received_data1;
+	reg [AXIS_DATA_BYTES-1:0] received_ctl1;
+	reg received_valid1;
+	reg [AXIS_DATA_WIDTH-1:0] received_data2;
+	reg [AXIS_DATA_BYTES-1:0] received_ctl2;
+	reg received_valid2;
     
     reg frame_too_short;
     reg frame_too_long;
@@ -171,12 +177,12 @@ module rx_mac #(
                     crc_error <= 1'b0;
                     start_found <= 1'b0;	// maybe delete 
 					
-					if(	(in_xgmii_ctl[0] && in_xgmii_data[0:7] == XGMII_START) begin
-						if(	(!in_xgmii_ctl[1] && in_xgmii_data[8:15] == PREAMBLE_BYTE) &&
-							(!in_xgmii_ctl[2] && in_xgmii_data[16:23] == PREAMBLE_BYTE) &&
-							(!in_xgmii_ctl[3] && in_xgmii_data[24:31] == XGMII_START)) begin 
+					if(in_xgmii_ctl[0] && in_xgmii_data[7:0] == XGMII_START) begin
+						if(	(!in_xgmii_ctl[1] && in_xgmii_data[15:8] == PREAMBLE_BYTE) &&
+							(!in_xgmii_ctl[2] && in_xgmii_data[23:16] == PREAMBLE_BYTE) &&
+							(!in_xgmii_ctl[3] && in_xgmii_data[31:24] == PREAMBLE_BYTE)) begin 
 							current_state <= PREAMBLE_STATE;
-							frame_byte_count = frame_byte_count + 4;
+							frame_byte_count <= frame_byte_count + 4;
 						end else begin
 							frame_error <= 1'b1;
 						end
@@ -188,10 +194,10 @@ module rx_mac #(
                 PREAMBLE_STATE: begin
                     crc_reset <= 1'b1; 
 					
-					if(	(!in_xgmii_ctl[0] && in_xgmii_data[0:7] == PREAMBLE_BYTE) &&
-						(!in_xgmii_ctl[0] && in_xgmii_data[0:7] == PREAMBLE_BYTE) &&
-						(!in_xgmii_ctl[0] && in_xgmii_data[0:7] == PREAMBLE_BYTE) &&
-						(!in_xgmii_ctl[0] && in_xgmii_data[0:7] == PREAMBLE_BYTE)) begin 
+					if(	(!in_xgmii_ctl[0] && in_xgmii_data[7:0] == PREAMBLE_BYTE) &&
+						(!in_xgmii_ctl[1] && in_xgmii_data[15:8] == PREAMBLE_BYTE) &&
+						(!in_xgmii_ctl[2] && in_xgmii_data[23:16] == PREAMBLE_BYTE) &&
+						(!in_xgmii_ctl[3] && in_xgmii_data[31:24] == SFD_BYTE)) begin 
 						current_state <= MAC_HEADER_STATE;
 						frame_byte_count = frame_byte_count + 4;
 					end else begin
@@ -225,8 +231,9 @@ module rx_mac #(
 						12: begin
 							crc_data_in <= in_xgmii_data;
 							crc_valid_in <= 4'b0011;
-							byte_counter <= 0;
+							byte_counter <= byte_counter + 2;
 							frame_byte_count <= frame_byte_count + 2;
+							current_state <= PAYLOAD_STATE;
 						end						
 					endcase 
                 end
@@ -237,102 +244,57 @@ module rx_mac #(
                     terminate_detected <= 1'b0;
                     error_detected <= 1'b0;
                     terminate_found <= 1'b0;
-                    for (i = 0; i < XGMII_DATA_BYTES; i = i + 1) begin
-                        if (!terminate_detected && !error_detected && in_xgmii_ctl[i]) begin
-                            if (in_xgmii_data[i*8 +: 8] == XGMII_TERMINATE) begin
-                                terminate_found <= 1'b1;
-                                byte_counter <= i; 
-                                next_state <= FCS_STATE;
-                                terminate_detected <= 1'b1;
-                            end else if (in_xgmii_data[i*8 +: 8] == XGMII_ERROR) begin
-                                next_state <= ERROR_STATE;
-                                error_found <= 1'b1;
-                                error_detected <= 1'b1;
-                            end
-                        end
-                    end
-                    
-                    if (!terminate_found && !error_found) begin
-                        crc_data_in <= in_xgmii_data;
-                        crc_valid_in <= ~in_xgmii_ctl; 
-                        if (!fifo_full) begin
-                            fifo_wr_en <= 1'b1;
-                            if (AXIS_DATA_WIDTH == 32) begin
-                                fifo_wr_data <= {1'b0, ~in_xgmii_ctl, in_xgmii_data};
-                            end else begin
-                                if (buffer_valid) begin
-                                    fifo_wr_data <= {1'b0, 8'b11111111, in_xgmii_data, data_buffer};
-                                    buffer_valid <= 1'b0;
-                                end else begin
-                                    data_buffer <= in_xgmii_data;
-                                    buffer_valid <= 1'b1;
-                                    fifo_wr_en <= 1'b0;
-                                end
-                            end
-                        end
-                    end
-                    
-                    frame_byte_count <= frame_byte_count + XGMII_DATA_BYTES;
-                    payload_length <= payload_length + XGMII_DATA_BYTES;
-                    if (frame_byte_count > MAX_FRAME_SIZE) begin
-                        next_state <= ERROR_STATE;
-                        frame_too_long <= 1'b1;
-                    end
-                end
+					
+					if(received_valid1) begin
+						if (received_data2[31:24] == XGMII_TERMINATE) begin
+							terminate_detected <= 1'b1;
+							received_crc <= received_data1;
+							current_state <= FCS_STATE;
+						end else begin
+							 received_data1 <= received_data2;
+							 received_ctl1 <= received_ctl2;
+						end
+					end else begin 
+						received_data2 <= in_xgmii_data;
+						received_ctl2 <= in_xgmii_ctl;
+						received_valid2 <= 1'b1;
+						received_data1 <= received_data2;
+						received_ctl1 <= received_ctl2;
+						received_valid1 <= received_valid2;
+					end
+                end 
                 
                 FCS_STATE: begin
-                    crc_enable <= 1'b0;
-                    if (byte_counter >= 4) begin
-                        for (i = 0; i < 4; i = i + 1) begin
-                            received_crc[i*8 +: 8] <= in_xgmii_data[(byte_counter - 4 + i)*8 +: 8];
-                        end
-                    end else begin
-                        received_crc <= in_xgmii_data;
-                    end
-                    
-                    next_state <= FRAME_COMPLETE_STATE;
-                end
-                
-                FRAME_COMPLETE_STATE: begin
                     frame_in_progress <= 1'b0;
                     frame_receiving <= 1'b0;
                     if ({received_crc[7:0], received_crc[15:8], received_crc[23:16], received_crc[31:24]} != crc_out) begin
                         crc_error <= 1'b1;
                         frame_error <= 1'b1;
-                        next_state <= DISCARD_STATE;
+                        current_state <= IDLE_STATE;
                     end else if (frame_too_short || frame_too_long || alignment_error) begin
                         frame_error <= 1'b1;
-                        next_state <= DISCARD_STATE;
+                        current_state <= DISCARD_STATE;
                     end else if (payload_length < MIN_PAYLOAD_SIZE) begin
                         frame_too_short <= 1'b1;
                         frame_error <= 1'b1;
-                        next_state <= DISCARD_STATE;
+                        current_state <= DISCARD_STATE;
                     end else begin
-                        frame_valid <= 1'b1;
-                        
-                        // Mark last word in FIFO
-                        if (buffer_valid && AXIS_DATA_WIDTH == 64) begin
-                            fifo_wr_en <= 1'b1;
-                            fifo_wr_data <= {1'b1, 8'b11110000, 32'h0, data_buffer}; 
-                            buffer_valid <= 1'b0;
-                        end
-                        
-                        next_state <= IDLE_STATE;
+                        frame_valid <= 1'b1;                        
+                        current_state <= IDLE_STATE;
                     end
                 end
                 
                 ERROR_STATE: begin
                     frame_error <= 1'b1;
-                    next_state <= DISCARD_STATE;
+                    current_state <= DISCARD_STATE;
                 end
                 
                 DISCARD_STATE: begin
                     buffer_valid <= 1'b0;
-                    fifo_wr_en <= 1'b0;
-                    next_state <= IDLE_STATE;
+                    current_state <= IDLE_STATE;
                 end
                 
-                default: next_state <= IDLE_STATE;
+                default: current_state <= IDLE_STATE;
             endcase
         end
     end
@@ -343,37 +305,19 @@ module rx_mac #(
             out_master_rx_tkeep <= 0;
             out_master_rx_tvalid <= 1'b0;
             out_master_rx_tlast <= 1'b0;
-            fifo_rd_en <= 1'b0;
         end else begin
-            fifo_rd_en <= 1'b0;
-            
-            if (!fifo_empty && in_master_rx_tready && frame_valid) begin
+            if (received_valid1) begin
                 fifo_rd_en <= 1'b1;
-                out_master_rx_tdata <= fifo_rd_data[AXIS_DATA_WIDTH-1:0];
-                out_master_rx_tkeep <= fifo_rd_data[FIFO_DATA_WIDTH-2:AXIS_DATA_WIDTH];
+                out_master_rx_tdata <= received_data1;
+                out_master_rx_tkeep <= received_ctl1;
                 out_master_rx_tlast <= fifo_rd_data[FIFO_DATA_WIDTH-1];
                 out_master_rx_tvalid <= 1'b1;
-            end else if (!in_master_rx_tready || fifo_empty) begin
+            end else begin
                 out_master_rx_tvalid <= 1'b0;
-                out_master_rx_tlast <= 1'b0;
+                out_master_rx_tlast <= terminate_detected;
             end
         end
     end
-    
-    sync_fifo #(
-        .DATA_WIDTH(FIFO_DATA_WIDTH),
-        .ADDR_WIDTH(FIFO_ADDR_WIDTH),
-        .FIFO_DEPTH(FIFO_DEPTH)
-    ) frame_buffer (
-        .clk(rx_clk),
-        .rst(rx_rst),
-        .wr_en(fifo_wr_en),
-        .wr_data(fifo_wr_data),
-        .rd_en(fifo_rd_en),
-        .rd_data(fifo_rd_data),
-        .full(fifo_full),
-        .empty(fifo_empty)
-    );
     
     crc32 #(
         .SLICE_LENGTH(4),
