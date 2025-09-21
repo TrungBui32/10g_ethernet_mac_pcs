@@ -64,6 +64,7 @@ module rx_mac #(
     reg [FIFO_DATA_WIDTH-1:0] fifo_wr_data;
     wire fifo_empty;
     wire fifo_full;
+    wire fifo_almost_full;
     
     reg frame_in_progress;
     reg frame_receiving;
@@ -83,6 +84,7 @@ module rx_mac #(
     reg crc_reset;
     reg [31:0] crc_data_in;
     reg [3:0] crc_valid_in;
+    reg crc_enable;
     reg [31:0] received_crc;
     reg [3:0] crc_byte_count;
     
@@ -122,6 +124,7 @@ module rx_mac #(
             error_found <= 1'b0;
             payload_length <= 0;
             crc_reset <= 1'b1;
+            crc_enable <= 1'b0;
             crc_byte_count <= 0;
             received_crc <= 0;
             mac_header_index <= 0;
@@ -155,6 +158,7 @@ module rx_mac #(
                     preamble_count <= 0;
                     payload_length <= 0;
                     crc_reset <= 1'b1;
+                    crc_enable <= 1'b0;
                     crc_byte_count <= 0;
                     received_crc <= 0;
                     mac_header_index <= 0;
@@ -193,6 +197,7 @@ module rx_mac #(
                                     next_state <= MAC_HEADER_STATE;
                                     byte_counter <= (byte_counter + i + 1) % XGMII_DATA_BYTES;
                                     crc_reset <= 1'b0; 
+                                    crc_enable <= 1'b1;
                                 end else begin
                                     next_state <= ERROR_STATE;
                                     error_found <= 1'b1;
@@ -218,6 +223,7 @@ module rx_mac #(
                 end
                 
                 MAC_HEADER_STATE: begin
+                    crc_enable <= 1'b1;
                     error_detected <= 1'b0;
                     for (i = 0; i < XGMII_DATA_BYTES; i = i + 1) begin
                         if (!error_detected) begin
@@ -260,6 +266,7 @@ module rx_mac #(
                 end
                 
                 PAYLOAD_STATE: begin
+                    crc_enable <= 1'b1;
                     fifo_wr_en <= 1'b0;
                     terminate_detected <= 1'b0;
                     error_detected <= 1'b0;
@@ -308,6 +315,7 @@ module rx_mac #(
                 end
                 
                 FCS_STATE: begin
+                    crc_enable <= 1'b0;
                     if (byte_counter >= 4) begin
                         for (i = 0; i < 4; i = i + 1) begin
                             received_crc[i*8 +: 8] <= in_xgmii_data[(byte_counter - 4 + i)*8 +: 8];
@@ -398,20 +406,20 @@ module rx_mac #(
         .rd_en(fifo_rd_en),
         .rd_data(fifo_rd_data),
         .full(fifo_full),
-        .empty(fifo_empty),
+        .empty(fifo_empty)
     );
     
-    slicing_crc #(
+    crc32 #(
         .SLICE_LENGTH(4),
         .INITIAL_CRC(32'hFFFFFFFF),    
         .INVERT_OUTPUT(1),             
         .REGISTER_OUTPUT(0)   
-    ) ethernet_crc (
-        .i_clk(rx_clk),
-        .i_reset(crc_reset),
-        .i_data(crc_data_in),
-        .i_valid(crc_valid_in),
-        .o_crc(crc_out)
+    ) crc (
+        .clk(rx_clk),
+        .rst(crc_reset),
+        .in_data(crc_data_in),
+        .in_valid(crc_valid_in),
+        .out_crc(crc_out)
     );
     
 endmodule
