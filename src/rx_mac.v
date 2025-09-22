@@ -40,9 +40,6 @@ module rx_mac #(
     localparam MAC_HEADER_SIZE = 14;      
     localparam FCS_SIZE = 4;              
     
-    localparam FIFO_DATA_WIDTH = AXIS_DATA_WIDTH + AXIS_DATA_BYTES + 1;
-    localparam FIFO_ADDR_WIDTH = 1;			// set =1 for terminate detection
-    
     localparam [3:0] IDLE_STATE = 4'd0;
     localparam [3:0] PREAMBLE_STATE = 4'd1;
     localparam [3:0] MAC_HEADER_STATE = 4'd2;
@@ -51,40 +48,22 @@ module rx_mac #(
     localparam [3:0] FRAME_COMPLETE_STATE = 4'd5;
     localparam [3:0] ERROR_STATE = 4'd6;
     localparam [3:0] DISCARD_STATE = 4'd7;
+    localparam [3:0] TERMINATE_STATE = 4'd8;
     
     reg [3:0] current_state;
     reg [11:0] byte_counter;
     reg [15:0] frame_byte_count;
     reg [3:0] preamble_count;
     
-    reg fifo_wr_en;
-    reg fifo_rd_en;
-    wire [FIFO_DATA_WIDTH-1:0] fifo_rd_data;
-    reg [FIFO_DATA_WIDTH-1:0] fifo_wr_data;
-    wire fifo_empty;
-    wire fifo_full;
-    
     reg frame_in_progress;
     reg frame_receiving;
     reg [15:0] payload_length;
-    reg sfd_found;
-    reg terminate_found;
-    reg error_found;
-    
-    reg [AXIS_DATA_WIDTH-1:0] output_data;
-    reg [AXIS_DATA_BYTES-1:0] output_keep;
-    reg output_last;
-    reg [31:0] data_buffer;
-    reg [7:0] buffer_bytes;
-    reg buffer_valid;
     
     wire [31:0] crc_out;
     reg crc_reset;
     reg [31:0] crc_data_in;
     reg [3:0] crc_valid_in;
-    reg crc_enable;
     reg [31:0] received_crc;
-    reg [3:0] crc_byte_count;
     
     reg [7:0] mac_header [0:MAC_HEADER_SIZE-1];
     reg [3:0] mac_header_index;
@@ -123,24 +102,12 @@ module rx_mac #(
             preamble_count <= 0;
             frame_in_progress <= 1'b0;
             frame_receiving <= 1'b0;
-            sfd_found <= 1'b0;
-            terminate_found <= 1'b0;
-            error_found <= 1'b0;
             payload_length <= 0;
             crc_reset <= 1'b1;
-            crc_enable <= 1'b0;
-            crc_byte_count <= 0;
-            received_crc <= 0;
-            mac_header_index <= 0;
             mac_header_complete <= 1'b0;
             frame_too_short <= 1'b0;
             frame_too_long <= 1'b0;
             alignment_error <= 1'b0;
-            data_buffer <= 0;
-            buffer_bytes <= 0;
-            buffer_valid <= 1'b0;
-            fifo_wr_en <= 1'b0;
-            fifo_wr_data <= 0;
             frame_valid <= 1'b0;
             frame_error <= 1'b0;
             crc_error <= 1'b0;
@@ -152,26 +119,17 @@ module rx_mac #(
                 IDLE_STATE: begin
                     frame_in_progress <= 1'b0;
                     frame_receiving <= 1'b0;
-                    sfd_found <= 1'b0;
-                    terminate_found <= 1'b0;
-                    error_found <= 1'b0;
                     byte_counter <= 0;
                     frame_byte_count <= 0;
                     preamble_count <= 0;
                     payload_length <= 0;
                     crc_reset <= 1'b1;
-                    crc_enable <= 1'b0;
-                    crc_byte_count <= 0;
                     received_crc <= 0;
                     mac_header_index <= 0;
                     mac_header_complete <= 1'b0;
                     frame_too_short <= 1'b0;
                     frame_too_long <= 1'b0;
                     alignment_error <= 1'b0;
-                    data_buffer <= 0;
-                    buffer_bytes <= 0;
-                    buffer_valid <= 1'b0;
-                    fifo_wr_en <= 1'b0;
                     frame_valid <= 1'b0;
                     frame_error <= 1'b0;
                     crc_error <= 1'b0;
@@ -188,6 +146,12 @@ module rx_mac #(
 						end
 					end else begin
 						current_state <= IDLE_STATE;
+						received_data2 <= in_xgmii_data;
+						received_ctl2 <= in_xgmii_ctl;
+						received_valid2 <= 1'b0;
+						received_data1 <= received_data2;
+						received_ctl1 <= received_ctl2;
+						received_valid1 <= received_valid2;
 					end
                 end
                 
@@ -206,7 +170,6 @@ module rx_mac #(
                 end
                 
                 MAC_HEADER_STATE: begin
-                    crc_enable <= 1'b1;
                     error_detected <= 1'b0;
 					
 					case(byte_counter)
@@ -239,20 +202,18 @@ module rx_mac #(
                 end
                 
                 PAYLOAD_STATE: begin
-                    crc_enable <= 1'b1;
-                    fifo_wr_en <= 1'b0;
                     terminate_detected <= 1'b0;
                     error_detected <= 1'b0;
-                    terminate_found <= 1'b0;
 					
 					if(received_valid1) begin
 						if (received_data2[31:24] == XGMII_TERMINATE) begin
-							terminate_detected <= 1'b1;
 							received_crc <= received_data1;
 							current_state <= FCS_STATE;
 						end else begin
 							 received_data1 <= received_data2;
 							 received_ctl1 <= received_ctl2;
+							 received_data2 <= in_xgmii_data;
+							 received_ctl2 <= in_xgmii_ctl;
 						end
 					end else begin 
 						received_data2 <= in_xgmii_data;
@@ -279,8 +240,9 @@ module rx_mac #(
                         frame_error <= 1'b1;
                         current_state <= DISCARD_STATE;
                     end else begin
-                        frame_valid <= 1'b1;                        
-                        current_state <= IDLE_STATE;
+                        frame_valid <= 1'b1;         
+                        terminate_detected <= 1'b0;               
+                        current_state <= TERMINATE_STATE;
                     end
                 end
                 
@@ -290,7 +252,11 @@ module rx_mac #(
                 end
                 
                 DISCARD_STATE: begin
-                    buffer_valid <= 1'b0;
+                    current_state <= IDLE_STATE;
+                end
+                
+                TERMINATE_STATE: begin
+                    terminate_detected <= 1'b0;
                     current_state <= IDLE_STATE;
                 end
                 
@@ -307,15 +273,13 @@ module rx_mac #(
             out_master_rx_tlast <= 1'b0;
         end else begin
             if (received_valid1) begin
-                fifo_rd_en <= 1'b1;
                 out_master_rx_tdata <= received_data1;
                 out_master_rx_tkeep <= received_ctl1;
-                out_master_rx_tlast <= fifo_rd_data[FIFO_DATA_WIDTH-1];
                 out_master_rx_tvalid <= 1'b1;
             end else begin
                 out_master_rx_tvalid <= 1'b0;
-                out_master_rx_tlast <= terminate_detected;
             end
+            out_master_rx_tlast <= terminate_detected;
         end
     end
     
