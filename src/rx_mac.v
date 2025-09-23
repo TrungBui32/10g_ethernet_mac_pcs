@@ -1,3 +1,25 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date: 09/22/2025 09:19:42 AM
+// Design Name: 
+// Module Name: rx_mac
+// Project Name: 
+// Target Devices: 
+// Tool Versions: 
+// Description: 
+// 
+// Dependencies: 
+// 
+// Revision:
+// Revision 0.01 - File Created
+// Additional Comments:
+// 
+//////////////////////////////////////////////////////////////////////////////////
+
+
 module rx_mac #(
     parameter AXIS_DATA_WIDTH = 32,
     parameter AXIS_DATA_BYTES = AXIS_DATA_WIDTH/8,
@@ -52,11 +74,6 @@ module rx_mac #(
     reg [3:0] current_state;
     reg [11:0] byte_counter;
     reg [15:0] frame_byte_count;
-    reg [3:0] preamble_count;
-    
-    reg frame_in_progress;
-    reg frame_receiving;
-    reg [15:0] payload_length;
     
     wire [31:0] crc_out;
     reg crc_reset;
@@ -64,10 +81,6 @@ module rx_mac #(
     reg [3:0] crc_valid_in;
     reg [31:0] received_crc;
     
-    reg [7:0] mac_header [0:MAC_HEADER_SIZE-1];
-    reg [3:0] mac_header_index;
-    reg mac_header_complete;
-	
 	reg [AXIS_DATA_WIDTH-1:0] received_data1;
 	reg [AXIS_DATA_BYTES-1:0] received_ctl1;
 	reg received_valid1;
@@ -77,11 +90,8 @@ module rx_mac #(
     
     reg frame_too_short;
     reg frame_too_long;
-    reg alignment_error;
     
-    reg start_found;
     reg terminate_detected;
-    reg error_detected;
     
     integer i;
     
@@ -98,41 +108,26 @@ module rx_mac #(
             current_state <= IDLE_STATE;
             byte_counter <= 0;
             frame_byte_count <= 0;
-            preamble_count <= 0;
-            frame_in_progress <= 1'b0;
-            frame_receiving <= 1'b0;
-            payload_length <= 0;
             crc_reset <= 1'b0;
-            mac_header_complete <= 1'b0;
             frame_too_short <= 1'b0;
             frame_too_long <= 1'b0;
-            alignment_error <= 1'b0;
             frame_valid <= 1'b0;
             frame_error <= 1'b0;
             crc_error <= 1'b0;
-            start_found <= 1'b0;
             terminate_detected <= 1'b0;
-            error_detected <= 1'b0;
         end else begin
+            frame_too_short <= 1'b0;
+            frame_too_long <= 1'b0;
+            frame_valid <= 1'b0;
+            frame_error <= 1'b0;
+            crc_error <= 1'b0;
+            terminate_detected <= 1'b0;
             case (current_state)
                 IDLE_STATE: begin
-                    frame_in_progress <= 1'b0;
-                    frame_receiving <= 1'b0;
                     byte_counter <= 0;
                     frame_byte_count <= 0;
-                    preamble_count <= 0;
-                    payload_length <= 0;
                     crc_reset <= 1'b1;
                     received_crc <= 0;
-                    mac_header_index <= 0;
-                    mac_header_complete <= 1'b0;
-                    frame_too_short <= 1'b0;
-                    frame_too_long <= 1'b0;
-                    alignment_error <= 1'b0;
-                    frame_valid <= 1'b0;
-                    frame_error <= 1'b0;
-                    crc_error <= 1'b0;
-                    start_found <= 1'b0;	// maybe delete 
 					
 					if(in_xgmii_ctl[0] && in_xgmii_data[7:0] == XGMII_START) begin
 						if(	(!in_xgmii_ctl[1] && in_xgmii_data[15:8] == PREAMBLE_BYTE) &&
@@ -168,8 +163,6 @@ module rx_mac #(
                 end
                 
                 MAC_HEADER_STATE: begin
-                    error_detected <= 1'b0;
-					
 					case(byte_counter)
 						0: begin
 							crc_data_in <= in_xgmii_data;
@@ -200,9 +193,6 @@ module rx_mac #(
                 end
                 
                 PAYLOAD_STATE: begin
-                    terminate_detected <= 1'b0;
-                    error_detected <= 1'b0;
-					
 					if(received_valid1) begin
 						if (received_data2[31:24] == XGMII_TERMINATE) begin
 							received_crc <= received_data1;
@@ -211,6 +201,7 @@ module rx_mac #(
 							received_valid2 <= 1'b0;
 							crc_data_in <= 32'h00000000;
 							crc_valid_in <= 4'b0000;
+							terminate_detected <= 1'b1;
 						end else begin
 							 received_data1 <= received_data2;
 							 received_ctl1 <= received_ctl2;
@@ -232,35 +223,31 @@ module rx_mac #(
                 end 
                 
                 FCS_STATE: begin
-                    frame_in_progress <= 1'b0;
-                    frame_receiving <= 1'b0;
+                    terminate_detected <= 1'b0;
                     if (received_crc != crc_out) begin
                         crc_error <= 1'b1;
                         frame_error <= 1'b1;
-                        current_state <= IDLE_STATE;
-                    // maybe use frame_too_short || frame_too_long || alignment_error || 
-                    end else if ((frame_byte_count < MIN_FRAME_SIZE) || (frame_byte_count > MAX_FRAME_SIZE)) begin
+                        current_state <= ERROR_STATE;
+                    end else if (frame_byte_count > MAX_FRAME_SIZE) begin
                         frame_error <= 1'b1;
-                        current_state <= DISCARD_STATE;
+                        frame_too_long <= 1'b1;
+                        current_state <= ERROR_STATE;
+                    end else if (frame_byte_count < MIN_FRAME_SIZE) begin
+                        frame_error <= 1'b1;
+                        frame_too_short <= 1'b1;
+                        current_state <= ERROR_STATE;
                     end else begin
                         frame_valid <= 1'b1;         
-                        terminate_detected <= 1'b1;               
                         current_state <= TERMINATE_STATE;
                     end
                 end
                 
                 ERROR_STATE: begin
                     frame_error <= 1'b1;
-                    current_state <= DISCARD_STATE;
-                end
-                
-                DISCARD_STATE: begin
                     current_state <= IDLE_STATE;
-                    frame_byte_count <= 0;
                 end
                 
                 TERMINATE_STATE: begin
-                    terminate_detected <= 1'b0;
                     current_state <= IDLE_STATE;
                     frame_byte_count <= 0;
                 end
@@ -277,7 +264,7 @@ module rx_mac #(
             out_master_rx_tvalid <= 1'b0;
             out_master_rx_tlast <= 1'b0;
         end else begin
-            if (received_valid1) begin
+            if (received_valid1 && !(received_data2[31:24] == XGMII_TERMINATE)) begin
                 out_master_rx_tdata <= received_data1;
                 out_master_rx_tkeep <= received_ctl1;
                 out_master_rx_tvalid <= 1'b1;
