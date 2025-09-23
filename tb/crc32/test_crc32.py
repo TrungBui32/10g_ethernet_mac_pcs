@@ -15,6 +15,8 @@ class CRC32Testbench:
         self.INVERT_OUTPUT = 1
         self.REGISTER_OUTPUT = 1
         self.MAX_SLICE_LENGTH = 16
+        
+        self.crc_history = []
     
     async def reset(self): 
         self.dut.rst.value = 0
@@ -24,6 +26,20 @@ class CRC32Testbench:
         await ClockCycles(self.dut.clk, 5)
         self.dut.rst.value = 1
         await ClockCycles(self.dut.clk, 5)
+    
+    async def monitor_crc_continuous(self, num_cycles):
+        self.crc_history = []
+        
+        for cycle in range(num_cycles):
+            await RisingEdge(self.dut.clk)
+            
+            try:
+                current_crc = int(self.dut.out_crc.value)
+                self.crc_history.append(current_crc)
+                self.dut._log.info(f"Cycle {cycle}: CRC = 0x{current_crc:08x}")
+            except ValueError:
+                self.crc_history.append(None)
+                self.dut._log.info(f"Cycle {cycle}: CRC = {self.dut.out_crc.value} (unresolved)")
     
     async def send_data(self, test_data, test_valid):
         for i in range(len(test_data)):  
@@ -40,9 +56,38 @@ class CRC32Testbench:
         
         await ClockCycles(self.dut.clk, 5)
     
-    async def capture_crc_out(self):
-        await ClockCycles(self.dut.clk, 2)  
-        return self.dut.out_crc.value
+    async def send_data_with_monitoring(self, test_data, test_valid):
+        self.crc_history = []
+        
+        for i in range(len(test_data)):  
+            await RisingEdge(self.dut.clk)
+            
+            try:
+                current_crc = int(self.dut.out_crc.value)
+                self.crc_history.append(current_crc)
+                self.dut._log.info(f"Cycle {i}: CRC = 0x{current_crc:08x}")
+            except ValueError:
+                self.crc_history.append(None)
+                self.dut._log.info(f"Cycle {i}: CRC = {self.dut.out_crc.value} (unresolved)")
+            
+            self.dut.in_data.value = test_data[i]
+            self.dut.in_valid.value = test_valid[i]
+            self.dut._log.info(f"  Sending: data=0x{test_data[i]:08x}, valid=0x{test_valid[i]:x}")
+        
+        for i in range(10):
+            await RisingEdge(self.dut.clk)
+            
+            if i == 0:  
+                self.dut.in_data.value = 0
+                self.dut.in_valid.value = 0
+            
+            try:
+                current_crc = int(self.dut.out_crc.value)
+                self.crc_history.append(current_crc)
+                self.dut._log.info(f"Post-data cycle {i}: CRC = 0x{current_crc:08x}")
+            except ValueError:
+                self.crc_history.append(None)
+                self.dut._log.info(f"Post-data cycle {i}: CRC = {self.dut.out_crc.value} (unresolved)")
     
     def calculate_crc32(self, data_list, valid_list):
         byte_data = b''
@@ -69,11 +114,10 @@ class CRC32Testbench:
         return crc32_calc.checksum(byte_data)
 
 @cocotb.test()
-async def test_crc(dut):
+async def test_crc_with_monitoring(dut):
     tb = CRC32Testbench(dut)
     
     cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())
-    
     await tb.reset()
     
     test_value = [0x33221100, 0xBBAA5544, 0xFFEEDDCC, 0x00000008, 
@@ -84,18 +128,50 @@ async def test_crc(dut):
     test_valid = [0xF, 0xF, 0xF, 0x3, 0xF, 0xF, 0xF, 0xF,
                   0xF, 0xF, 0xF, 0xF, 0xF, 0xF, 0xF, 0xF]
     
-    await tb.send_data(test_value, test_valid)
-    final_crc = await tb.capture_crc_out()
+    await tb.send_data_with_monitoring(test_value, test_valid)
     
+    final_crc = tb.crc_history[-1] if tb.crc_history else 0
     expected_crc = tb.calculate_crc32(test_value, test_valid)
     
-    dut._log.info(f"Final CRC: 0x{int(final_crc):08x}")
+    dut._log.info(f"=== CRC HISTORY ===")
+    for i, crc in enumerate(tb.crc_history):
+        if crc is not None:
+            dut._log.info(f"Cycle {i}: 0x{crc:08x}")
+        else:
+            dut._log.info(f"Cycle {i}: unresolved")
+    
+    dut._log.info(f"Final CRC: 0x{final_crc:08x}")
     dut._log.info(f"Expected CRC: 0x{expected_crc:08x}")
     
-    assert int(final_crc) == expected_crc, f"CRC mismatch: got 0x{int(final_crc):08x}, expected 0x{expected_crc:08x}"
+    assert final_crc == expected_crc, f"CRC mismatch: got 0x{final_crc:08x}, expected 0x{expected_crc:08x}"
 
 @cocotb.test()
-async def test_simple_crc_debug(dut):
+async def test_crc_parallel_monitoring(dut):
+    tb = CRC32Testbench(dut)
+    
+    cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())
+    await tb.reset()
+    
+    test_value = [0x12345678, 0x9ABCDEF0, 0x11223344, 0x55667788]
+    test_valid = [0xF, 0xF, 0xF, 0xF]
+    
+    monitor_cycles = len(test_value) + 15 
+    monitor_task = cocotb.start_soon(tb.monitor_crc_continuous(monitor_cycles))
+    
+    await ClockCycles(dut.clk, 3)
+    send_task = cocotb.start_soon(tb.send_data(test_value, test_valid))
+    
+    await send_task
+    await monitor_task
+    
+    final_crc = tb.crc_history[-1] if tb.crc_history else 0
+    expected_crc = tb.calculate_crc32(test_value, test_valid)
+    
+    dut._log.info(f"Final CRC: 0x{final_crc:08x}")
+    dut._log.info(f"Expected CRC: 0x{expected_crc:08x}")
+
+@cocotb.test()
+async def test_simple_crc_debug_monitored(dut):
     tb = CRC32Testbench(dut)
     
     cocotb.start_soon(Clock(dut.clk, 10, units="ns").start())
@@ -104,8 +180,7 @@ async def test_simple_crc_debug(dut):
     test_value = [0x12345678]
     test_valid = [0xF]
     
-    await tb.send_data(test_value, test_valid)
-    final_crc = await tb.capture_crc_out()
+    await tb.send_data_with_monitoring(test_value, test_valid)
     
     data_le = test_value[0].to_bytes(4, 'little')
     data_be = test_value[0].to_bytes(4, 'big')
@@ -113,7 +188,10 @@ async def test_simple_crc_debug(dut):
     crc_le = crc32_calc.checksum(data_le)
     crc_be = crc32_calc.checksum(data_be)
     
-    dut._log.info(f"Hardware CRC: 0x{int(final_crc):08x}")
+    final_crc = tb.crc_history[-1] if tb.crc_history else 0
+    
+    dut._log.info(f"Hardware CRC: 0x{final_crc:08x}")
     dut._log.info(f"SW CRC (LE): 0x{crc_le:08x}")
+    dut._log.info(f"SW CRC (BE): 0x{crc_be:08x}")
     dut._log.info(f"Input data: 0x{test_value[0]:08x}")
     dut._log.info(f"Bytes (LE): {data_le.hex()}")

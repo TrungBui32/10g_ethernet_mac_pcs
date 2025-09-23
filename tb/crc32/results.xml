@@ -1,7 +1,8 @@
 <testsuites name="results">
   <testsuite name="all" package="all">
-    <property name="random_seed" value="1758610483" />
-    <testcase name="test_crc" classname="test_crc32" file="/home/trungbui/10g_ethernet_mac_pcs/tb/crc32/test_crc32.py" lineno="71" time="0.02284383773803711" sim_time_ns="330.001" ratio_time="14445.95272406955" />
-    <testcase name="test_simple_crc_debug" classname="test_crc32" file="/home/trungbui/10g_ethernet_mac_pcs/tb/crc32/test_crc32.py" lineno="97" time="0.005475759506225586" sim_time_ns="190.00099999999998" ratio_time="34698.56552026821" />
+    <property name="random_seed" value="1758615022" />
+    <testcase name="test_crc_with_monitoring" classname="test_crc32" file="/home/trungbui/10g_ethernet_mac_pcs/tb/crc32/test_crc32.py" lineno="116" time="0.029140949249267578" sim_time_ns="350.001" ratio_time="12010.624534092582" />
+    <testcase name="test_crc_parallel_monitoring" classname="test_crc32" file="/home/trungbui/10g_ethernet_mac_pcs/tb/crc32/test_crc32.py" lineno="148" time="0.012160301208496094" sim_time_ns="290.001" ratio_time="23848.1757176692" />
+    <testcase name="test_simple_crc_debug_monitored" classname="test_crc32" file="/home/trungbui/10g_ethernet_mac_pcs/tb/crc32/test_crc32.py" lineno="173" time="0.008774280548095703" sim_time_ns="210.0010000000001" ratio_time="23933.70018759851" />
   </testsuite>
 </testsuites>
