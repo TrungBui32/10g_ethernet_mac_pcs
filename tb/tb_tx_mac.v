@@ -54,23 +54,79 @@ module tb_tx_mac;
 
         @(posedge tx_clk);
         tx_rst = 1'b1; 
-        @(posedge tx_clk);
 
-
-        in_slave_tx_tvalid = 1'b1;
-        in_slave_tx_tdata = 32'h11223344;
-        in_slave_tx_tkeep = 4'b1111;
-        in_slave_tx_tlast = 1'b0; 
+        //1        
         @(posedge tx_clk); 
-        in_slave_tx_tdata = 32'h55667788;
-        in_slave_tx_tkeep = 4'b1110;
+        in_slave_tx_tdata = 32'hA1B2C3D4;
+        in_slave_tx_tkeep = 4'b1111;
         in_slave_tx_tvalid = 1'b1;
-        in_slave_tx_tlast = 1'b1; 
-//        @(posedge tx_clk);
-//        in_slave_tx_tdata = 32'h11223344;
-//        in_slave_tx_tkeep = 4'b1100;
-//        in_slave_tx_tvalid = 1'b1;
-//        in_slave_tx_tlast = 1'b1;
+        in_slave_tx_tlast = 1'b0;
+        //2
+        @(posedge tx_clk); 
+        in_slave_tx_tdata = 32'h12345678;
+        in_slave_tx_tkeep = 4'b1111;
+        in_slave_tx_tvalid = 1'b1;
+        in_slave_tx_tlast = 1'b0;
+        //3
+        @(posedge tx_clk); 
+        in_slave_tx_tdata = 32'hDEADBEEF;
+        in_slave_tx_tkeep = 4'b1111;
+        in_slave_tx_tvalid = 1'b1;
+        in_slave_tx_tlast = 1'b0;
+        //4
+        @(posedge tx_clk); 
+        in_slave_tx_tdata = 32'h87654321;
+        in_slave_tx_tkeep = 4'b1111;
+        in_slave_tx_tvalid = 1'b1;
+        in_slave_tx_tlast = 1'b0;
+        //5
+        @(posedge tx_clk); 
+        in_slave_tx_tdata = 32'hFEDCBA98;
+        in_slave_tx_tkeep = 4'b1111;
+        in_slave_tx_tvalid = 1'b1;
+        in_slave_tx_tlast = 1'b0;
+        //6
+        @(posedge tx_clk); 
+        in_slave_tx_tdata = 32'h55AA33CC;
+        in_slave_tx_tkeep = 4'b1111;
+        in_slave_tx_tvalid = 1'b1;
+        in_slave_tx_tlast = 1'b0;
+        //7
+        @(posedge tx_clk); 
+        in_slave_tx_tdata = 32'h9F8E7D6C;
+        in_slave_tx_tkeep = 4'b1111;
+        in_slave_tx_tvalid = 1'b1;
+        in_slave_tx_tlast = 1'b0;
+        //8
+        @(posedge tx_clk); 
+        in_slave_tx_tdata = 32'h1A2B3C4D;
+        in_slave_tx_tkeep = 4'b1111;
+        in_slave_tx_tvalid = 1'b1;
+        in_slave_tx_tlast = 1'b0;
+        //9
+        @(posedge tx_clk); 
+        in_slave_tx_tdata = 32'hCAFEBABE;
+        in_slave_tx_tkeep = 4'b1111;
+        in_slave_tx_tvalid = 1'b1;
+        in_slave_tx_tlast = 1'b0;
+        //10
+        @(posedge tx_clk); 
+        in_slave_tx_tdata = 32'h6789ABCD;
+        in_slave_tx_tkeep = 4'b1111;
+        in_slave_tx_tvalid = 1'b1;
+        in_slave_tx_tlast = 1'b0;
+        //11
+        @(posedge tx_clk); 
+        in_slave_tx_tdata = 32'hF0E1D2C3;
+        in_slave_tx_tkeep = 4'b1111;
+        in_slave_tx_tvalid = 1'b1;
+        in_slave_tx_tlast = 1'b0;
+        //12
+        @(posedge tx_clk); 
+        in_slave_tx_tdata = 32'h3E5F7A9B;
+        in_slave_tx_tkeep = 4'b1111;
+        in_slave_tx_tvalid = 1'b1;
+        in_slave_tx_tlast = 1'b1;
                 
         wait (out_slave_tx_tready == 1'b1); 
         @(posedge tx_clk);
@@ -78,7 +134,7 @@ module tb_tx_mac;
         in_slave_tx_tvalid = 1'b0;
         in_slave_tx_tlast = 1'b0;
 
-        #250; 
+        #100; 
 
         $finish;
     end
