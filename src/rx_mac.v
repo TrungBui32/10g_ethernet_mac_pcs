@@ -1,25 +1,3 @@
-`timescale 1ns / 1ps
-//////////////////////////////////////////////////////////////////////////////////
-// Company: 
-// Engineer: 
-// 
-// Create Date: 09/22/2025 09:19:42 AM
-// Design Name: 
-// Module Name: rx_mac
-// Project Name: 
-// Target Devices: 
-// Tool Versions: 
-// Description: 
-// 
-// Dependencies: 
-// 
-// Revision:
-// Revision 0.01 - File Created
-// Additional Comments:
-// 
-//////////////////////////////////////////////////////////////////////////////////
-
-
 module rx_mac #(
     parameter AXIS_DATA_WIDTH = 32,
     parameter AXIS_DATA_BYTES = AXIS_DATA_WIDTH/8,
@@ -36,7 +14,7 @@ module rx_mac #(
     output reg [AXIS_DATA_WIDTH-1:0] out_master_rx_tdata,
     output reg [AXIS_DATA_BYTES-1:0] out_master_rx_tkeep,
     output reg out_master_rx_tvalid,
-    output reg out_master_rx_tlast,
+    output out_master_rx_tlast,
     input in_master_rx_tready,
     
     output reg frame_valid,
@@ -91,9 +69,9 @@ module rx_mac #(
     reg frame_too_short;
     reg frame_too_long;
     
-    reg terminate_detected;
-    
     integer i;
+    
+    assign out_master_rx_tlast = (received_data2[31:24] == XGMII_TERMINATE);
     
     always @(posedge rx_clk) begin
         if (!rx_rst) begin
@@ -114,14 +92,12 @@ module rx_mac #(
             frame_valid <= 1'b0;
             frame_error <= 1'b0;
             crc_error <= 1'b0;
-            terminate_detected <= 1'b0;
         end else begin
             frame_too_short <= 1'b0;
             frame_too_long <= 1'b0;
             frame_valid <= 1'b0;
             frame_error <= 1'b0;
             crc_error <= 1'b0;
-            terminate_detected <= 1'b0;
             case (current_state)
                 IDLE_STATE: begin
                     byte_counter <= 0;
@@ -140,12 +116,12 @@ module rx_mac #(
 						end
 					end else begin
 						current_state <= IDLE_STATE;
-						received_data2 <= in_xgmii_data;
-						received_ctl2 <= in_xgmii_ctl;
+						received_data2 <= 32'h00000000;
+						received_ctl2 <= 4'h0000;
 						received_valid2 <= 1'b0;
-						received_data1 <= received_data2;
-						received_ctl1 <= received_ctl2;
-						received_valid1 <= received_valid2;
+						received_data1 <= 32'h00000000;
+						received_ctl1 <= 4'h0000;
+						received_valid1 <= 1'b0;
 					end
                 end
                 
@@ -199,9 +175,12 @@ module rx_mac #(
 							current_state <= FCS_STATE;
 							received_valid1 <= 1'b0;
 							received_valid2 <= 1'b0;
+							received_data1 <= 32'h00000000;
+							received_ctl1 <= 4'h0000;
+							received_data2 <= 32'h00000000;
+							received_ctl2 <= 4'h0000;
 							crc_data_in <= 32'h00000000;
 							crc_valid_in <= 4'b0000;
-							terminate_detected <= 1'b1;
 						end else begin
 							 received_data1 <= received_data2;
 							 received_ctl1 <= received_ctl2;
@@ -223,7 +202,6 @@ module rx_mac #(
                 end 
                 
                 FCS_STATE: begin
-                    terminate_detected <= 1'b0;
                     if (received_crc != crc_out) begin
                         crc_error <= 1'b1;
                         frame_error <= 1'b1;
@@ -262,7 +240,6 @@ module rx_mac #(
             out_master_rx_tdata <= 0;
             out_master_rx_tkeep <= 0;
             out_master_rx_tvalid <= 1'b0;
-            out_master_rx_tlast <= 1'b0;
         end else begin
             if (received_valid1 && !(received_data2[31:24] == XGMII_TERMINATE)) begin
                 out_master_rx_tdata <= received_data1;
@@ -273,7 +250,6 @@ module rx_mac #(
                 out_master_rx_tkeep <= 4'b1111;
                 out_master_rx_tvalid <= 1'b0;
             end
-            out_master_rx_tlast <= terminate_detected;
         end
     end
     
