@@ -181,8 +181,6 @@ module tx_mac #(
                     end
                     
                     PREAMBLE_STATE: begin
-                        crc_reset <= 1'b1; 
-                        
                         case (byte_counter)
                             0: begin
                                 out_xgmii_data <= {{3{PREAMBLE_BYTE}}, XGMII_START};
@@ -193,7 +191,6 @@ module tx_mac #(
                                 out_xgmii_data <= {SFD_BYTE, {3{PREAMBLE_BYTE}}};
                                 out_xgmii_ctl <= 4'b0000; 
                                 byte_counter <= 0;
-                                crc_reset <= 1'b0; 
                                 current_state <= MAC_HEADER_STATE;
                             end
                         endcase
