@@ -172,7 +172,7 @@ module tx_mac #(
                         out_xgmii_ctl <= {XGMII_DATA_BYTES{1'b1}};
                         byte_counter <= 0;
                         frame_byte_count <= 0;
-                        crc_reset <= 1'b1;
+                        crc_reset <= 1'b0;
                         data_valid <= 1'b0;
                         fifo_rd_en <= 1'b0;
                         if (in_slave_tx_tvalid && out_slave_tx_tready) begin		
