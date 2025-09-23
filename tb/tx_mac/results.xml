@@ -1,9 +1,0 @@
-<testsuites name="results">
-  <testsuite name="all" package="all">
-    <property name="random_seed" value="1758441580" />
-    <testcase name="test_simple_frame" classname="test_tx_mac" file="/mnt/c/Users/admin/Learning/FPGA-projects/10g_ethernet_mac_pcs/tb/tx_mac/test_tx_mac.py" lineno="414" time="0.08562541007995605" sim_time_ns="320.001" ratio_time="3737.220057704677" />
-    <testcase name="test_minimum_frame" classname="test_tx_mac" file="/mnt/c/Users/admin/Learning/FPGA-projects/10g_ethernet_mac_pcs/tb/tx_mac/test_tx_mac.py" lineno="435" time="0.058040618896484375" sim_time_ns="340.001" ratio_time="5857.983709760105" />
-    <testcase name="test_accurate_latency" classname="test_tx_mac" file="/mnt/c/Users/admin/Learning/FPGA-projects/10g_ethernet_mac_pcs/tb/tx_mac/test_tx_mac.py" lineno="463" time="0.0045392513275146484" sim_time_ns="140.0010000000001" ratio_time="30842.310746572843" />
-    <testcase name="test_back_to_back_frames" classname="test_tx_mac" file="/mnt/c/Users/admin/Learning/FPGA-projects/10g_ethernet_mac_pcs/tb/tx_mac/test_tx_mac.py" lineno="478" time="0.12685179710388184" sim_time_ns="1390.0009999999997" ratio_time="10957.67684601028" />
-  </testsuite>
-</testsuites>
