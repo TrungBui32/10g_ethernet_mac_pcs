@@ -8,7 +8,7 @@ module encoder #(
     
     input [XGMII_DATA_WIDTH-1:0] xgmii_data_in,
     input [XGMII_DATA_BYTES-1:0] xgmii_ctrl_in,
-    output reg xgmii_ready,
+    output xgmii_ready,
     
     output reg [PCS_DATA_WIDTH-1:0] encoded_data_out,
     output reg encoded_valid_out,
@@ -38,51 +38,47 @@ module encoder #(
     localparam XGMII_TERMINATE = 8'hFD;
     localparam XGMII_ERROR = 8'hFE;
     
-    reg [1:0] state;
-    localparam IDLE = 2'b00;
-    localparam COLLECT_LOW = 2'b01;
-    localparam COLLECT_HIGH = 2'b10;
-    localparam ENCODE = 2'b11;
+    reg state;
+    localparam FIRST = 1'd0;
+    localparam SECOND = 1'd1;
     
     reg [63:0] xgmii_data_block;
     reg [7:0] xgmii_ctrl_block;
     reg block_ready;
     
-    always @(*) begin
-        xgmii_ready = encoded_ready_in && (state == IDLE || state == COLLECT_LOW);
-    end
+    assign xgmii_ready = state == FIRST;
     
     // XGMII 
     always @(posedge clk) begin
         if (!rst) begin
-            state <= IDLE;
+            state <= FIRST;
             xgmii_data_block <= 64'h0;
             xgmii_ctrl_block <= 8'h0;
             block_ready <= 1'b0;
         end else begin
             case (state)
-                IDLE: begin
+                FIRST: begin
                     block_ready <= 1'b0;
-                    if (xgmii_ready && encoded_ready_in) begin
+                    if (encoded_ready_in) begin
                         xgmii_data_block[31:0] <= xgmii_data_in;
                         xgmii_ctrl_block[3:0] <= xgmii_ctrl_in;
-                        state <= COLLECT_HIGH;
+                        state <= SECOND;
                     end
                 end
                 
-                COLLECT_HIGH: begin
-                    if (xgmii_ready && encoded_ready_in) begin
+                SECOND: begin
+                    if (encoded_ready_in) begin
                         xgmii_data_block[63:32] <= xgmii_data_in;
                         xgmii_ctrl_block[7:4] <= xgmii_ctrl_in;
                         block_ready <= 1'b1;
-                        state <= ENCODE;
+                        state <= FIRST;
                     end
                 end
                 
-                ENCODE: begin
-                    block_ready <= 1'b0;
-                    state <= IDLE;
-                end
+//                ENCODE: begin
+//                    block_ready <= 1'b0;
+//                    state <= IDLE;
+//                end
             endcase
         end
     end
