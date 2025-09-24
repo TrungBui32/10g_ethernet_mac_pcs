@@ -1,52 +1,45 @@
 module mac #(
-    parameter AXIS_DATA_WIDTH = 64,
+    parameter AXIS_DATA_WIDTH = 32,
     parameter AXIS_DATA_BYTES = AXIS_DATA_WIDTH/8,
     parameter XGMII_DATA_WIDTH = 32,
     parameter XGMII_DATA_BYTES = XGMII_DATA_WIDTH/8,
     
     parameter [47:0] LOCAL_MAC = 48'hAA_BB_CC_DD_EE_FF,
     parameter [47:0] DEFAULT_DEST_MAC = 48'h00_11_22_33_44_55,
-    parameter [15:0] DEFAULT_ETHER_TYPE = 16'h0800, 
-    
-    parameter ENABLE_PROMISCUOUS_MODE = 1'b0,      
-    parameter ENABLE_CRC_CHECK = 1'b1,            
-    parameter ENABLE_LENGTH_CHECK = 1'b1,          
-    parameter ENABLE_PAUSE_FRAMES = 1'b0           
+    parameter [15:0] DEFAULT_ETHER_TYPE = 16'h0800         
 ) (
     input mac_clk,             
-    input mac_rst,              
-    
-    input [47:0] config_local_mac,      
-    input [47:0] config_dest_mac,      
-    input [15:0] config_ether_type,     
-    input config_promiscuous,          
-    input config_valid,                
-    
-    output [XGMII_DATA_WIDTH-1:0] xgmii_tx_data,
-    output [XGMII_DATA_BYTES-1:0] xgmii_tx_ctl,
-    input xgmii_tx_pcs_ready,
-    
-    input [XGMII_DATA_WIDTH-1:0] xgmii_rx_data,
-    input [XGMII_DATA_BYTES-1:0] xgmii_rx_ctl,
-    output xgmii_rx_pcs_ready,
-    
+    input mac_rst,                
+                   
+    // TX
     input [AXIS_DATA_WIDTH-1:0] tx_axis_tdata,
     input [AXIS_DATA_BYTES-1:0] tx_axis_tkeep,
     input tx_axis_tvalid,
     input tx_axis_tlast,
     output tx_axis_tready,
     
+    output [XGMII_DATA_WIDTH-1:0] xgmii_tx_data,
+    output [XGMII_DATA_BYTES-1:0] xgmii_tx_ctl,
+    input xgmii_tx_pcs_ready,
+    
+    output tx_frame_valid,              
+    output tx_frame_error,     
+    
+    // RX
+    input [XGMII_DATA_WIDTH-1:0] xgmii_rx_data,
+    input [XGMII_DATA_BYTES-1:0] xgmii_rx_ctl,
+    output xgmii_rx_pcs_ready,
+    
     output [AXIS_DATA_WIDTH-1:0] rx_axis_tdata,
     output [AXIS_DATA_BYTES-1:0] rx_axis_tkeep,
     output rx_axis_tvalid,
     output rx_axis_tlast,
     input rx_axis_tready,
-    
-    output tx_frame_valid,              
-    output tx_frame_error,             
+            
     output rx_frame_valid,              
     output rx_frame_error,          
     output rx_crc_error,          
+    
     
     output [31:0] stat_tx_frames,      
     output [31:0] stat_tx_bytes,       
@@ -54,46 +47,8 @@ module mac #(
     output [31:0] stat_rx_frames,     
     output [31:0] stat_rx_bytes,       
     output [31:0] stat_rx_errors,      
-    output [31:0] stat_rx_crc_errors,  
-    
-    input pause_req,                   
-    input [15:0] pause_time,           
-    output pause_frame_sent,           
-    output pause_frame_received,       
-    output [15:0] received_pause_time, 
-    
-    output link_up,                    
-    output [3:0] link_speed            
+    output [31:0] stat_rx_crc_errors     
 );
-
-    reg [47:0] active_local_mac;
-    reg [47:0] active_dest_mac;
-    reg [15:0] active_ether_type;
-    reg active_promiscuous;
-    
-    initial begin
-        active_local_mac = LOCAL_MAC;
-        active_dest_mac = DEFAULT_DEST_MAC;
-        active_ether_type = DEFAULT_ETHER_TYPE;
-        active_promiscuous = ENABLE_PROMISCUOUS_MODE;
-    end
-    
-    always @(posedge mac_clk) begin
-        if (!mac_rst) begin
-            active_local_mac <= LOCAL_MAC;
-            active_dest_mac <= DEFAULT_DEST_MAC;
-            active_ether_type <= DEFAULT_ETHER_TYPE;
-            active_promiscuous <= ENABLE_PROMISCUOUS_MODE;
-        end else if (config_valid) begin
-            active_local_mac <= config_local_mac;
-            active_dest_mac <= config_dest_mac;
-            active_ether_type <= config_ether_type;
-            active_promiscuous <= config_promiscuous;
-        end
-    end
-    
-    wire tx_mac_frame_valid, tx_mac_frame_error;
-    wire rx_mac_frame_valid, rx_mac_frame_error, rx_mac_crc_error;
     
     reg [31:0] tx_frame_counter;
     reg [31:0] tx_byte_counter;
@@ -103,16 +58,18 @@ module mac #(
     reg [31:0] rx_error_counter;
     reg [31:0] rx_crc_error_counter;
     
-    reg pause_frame_detected;
-    reg [15:0] pause_time_reg;
-    reg pause_sent_flag;
+    wire tx_mac_frame_error;
+    wire tx_mac_frame_valid;
     
-    assign link_up = xgmii_tx_pcs_ready && xgmii_rx_pcs_ready;
-    assign link_speed = 4'b1010; // 10G 
+    wire rx_mac_frame_error;
+    wire rx_mac_frame_valid;
+    wire rx_mac_crc_error;
+    
     
     assign tx_frame_valid = tx_mac_frame_valid;
     assign tx_frame_error = tx_mac_frame_error;
-    assign rx_frame_valid = rx_mac_frame_valid && (!rx_mac_frame_error || active_promiscuous);
+    
+    assign rx_frame_valid = rx_mac_frame_valid;
     assign rx_frame_error = rx_mac_frame_error;
     assign rx_crc_error = rx_mac_crc_error;
     
@@ -124,9 +81,28 @@ module mac #(
     assign stat_rx_errors = rx_error_counter;
     assign stat_rx_crc_errors = rx_crc_error_counter;
     
-    assign pause_frame_sent = pause_sent_flag;
-    assign pause_frame_received = pause_frame_detected;
-    assign received_pause_time = pause_time_reg;
+    reg [3:0] tx_byte_count_current;
+    reg [3:0] rx_byte_count_current;
+    
+    always @(*) begin
+        case(tx_axis_tkeep)
+            4'b1111: tx_byte_count_current = 4;
+            4'b0111: tx_byte_count_current = 3;
+            4'b0011: tx_byte_count_current = 2;
+            4'b0001: tx_byte_count_current = 1;
+            default: tx_byte_count_current = 0;
+        endcase
+    end
+    
+    always @(*) begin
+        case(rx_axis_tkeep)
+            4'b1111: rx_byte_count_current = 4;
+            4'b0111: rx_byte_count_current = 3;
+            4'b0011: rx_byte_count_current = 2;
+            4'b0001: rx_byte_count_current = 1;
+            default: rx_byte_count_current = 0;
+        endcase
+    end
     
     always @(posedge mac_clk) begin
         if (!mac_rst) begin
@@ -137,16 +113,16 @@ module mac #(
             rx_byte_counter <= 0;
             rx_error_counter <= 0;
             rx_crc_error_counter <= 0;
-            pause_frame_detected <= 1'b0;
-            pause_time_reg <= 0;
-            pause_sent_flag <= 1'b0;
         end else begin
-            if (tx_mac_frame_valid) begin
-                tx_frame_counter <= tx_frame_counter + 1;
+            if (tx_axis_tvalid && tx_axis_tready) begin
+                tx_byte_counter <= tx_byte_counter + tx_byte_count_current;
+                if (tx_axis_tlast) begin
+                    tx_frame_counter <= tx_frame_counter + 1;
+                end
             end
             
-            if (tx_mac_frame_error) begin
-                tx_error_counter <= tx_error_counter + 1;
+            if (rx_axis_tvalid && rx_axis_tready) begin
+                rx_byte_counter <= rx_byte_counter + rx_byte_count_current;
             end
             
             if (rx_mac_frame_valid && !rx_mac_frame_error) begin
@@ -160,9 +136,6 @@ module mac #(
             if (rx_mac_crc_error) begin
                 rx_crc_error_counter <= rx_crc_error_counter + 1;
             end
-            
-            pause_frame_detected <= 1'b0;
-            pause_sent_flag <= 1'b0;
         end
     end
     
@@ -181,7 +154,9 @@ module mac #(
         .out_slave_tx_tready(tx_axis_tready),
         .out_xgmii_data(xgmii_tx_data),
         .out_xgmii_ctl(xgmii_tx_ctl),
-        .in_xgmii_pcs_ready(xgmii_tx_pcs_ready)
+        .in_xgmii_pcs_ready(xgmii_tx_pcs_ready),
+        .frame_valid(tx_frame_valid),
+        .frame_error(tx_frame_error)
     );
     
     rx_mac #(
@@ -203,5 +178,5 @@ module mac #(
         .frame_valid(rx_mac_frame_valid),
         .frame_error(rx_mac_frame_error),
         .crc_error(rx_mac_crc_error)
-    );    
+    );
 endmodule
