@@ -17,7 +17,10 @@ module tx_mac #(
     // XGMII
     output reg [XGMII_DATA_WIDTH-1:0] out_xgmii_data,
     output reg [XGMII_DATA_BYTES-1:0] out_xgmii_ctl,
-    input in_xgmii_pcs_ready
+    input in_xgmii_pcs_ready,
+    
+    output reg frame_error,
+    output reg frame_valid
 );
 
     localparam XGMII_IDLE = 8'h07;        
@@ -74,7 +77,6 @@ module tx_mac #(
     assign fifo_tkeep = fifo_rd_data[FIFO_DATA_WIDTH-1:AXIS_DATA_WIDTH];
     assign out_slave_tx_tready = !fifo_full; 
     
-    reg frame_error;
     reg [15:0] payload_length;
     reg [7:0] pad_bytes_required;
     
@@ -158,7 +160,7 @@ module tx_mac #(
             out_xgmii_data <= {XGMII_DATA_BYTES{XGMII_IDLE}};
             out_xgmii_ctl <= {XGMII_DATA_BYTES{1'b1}};
             fifo_rd_en <= 1'b0;
-            crc_reset <= 1'b1;
+            crc_reset <= 1'b0;
             current_data <= 0;
             current_keep <= 0;
             data_valid <= 1'b0;
@@ -172,7 +174,7 @@ module tx_mac #(
                         out_xgmii_ctl <= {XGMII_DATA_BYTES{1'b1}};
                         byte_counter <= 0;
                         frame_byte_count <= 0;
-                        crc_reset <= 1'b0;
+                        crc_reset <= 1'b1;
                         data_valid <= 1'b0;
                         fifo_rd_en <= 1'b0;
                         if (in_slave_tx_tvalid && out_slave_tx_tready) begin		
@@ -202,21 +204,21 @@ module tx_mac #(
                         case (byte_counter)
                             0: begin
                                 out_xgmii_data <= {mac_header[3], mac_header[2], mac_header[1], mac_header[0]};
-                                crc_data_in <= {mac_header[2], mac_header[1], mac_header[0], 8'h00};
+                                crc_data_in <= {mac_header[3], mac_header[2], mac_header[1], mac_header[0]};
                                 crc_valid_in <= 4'b1111;
                                 byte_counter <= byte_counter + 4;
                                 frame_byte_count <= frame_byte_count + 4;
                             end 
                             4: begin
                                 out_xgmii_data <= {mac_header[7], mac_header[6], mac_header[5], mac_header[4]};
-                                crc_data_in <= {mac_header[6], mac_header[5], mac_header[4], mac_header[3]};
+                                crc_data_in <= {mac_header[7], mac_header[6], mac_header[5], mac_header[4]};
                                 crc_valid_in <= 4'b1111;
                                 byte_counter <= byte_counter + 4;
                                 frame_byte_count <= frame_byte_count + 4;
                             end
                             8: begin
                                 out_xgmii_data <= {mac_header[11], mac_header[10], mac_header[9], mac_header[8]};
-                                crc_data_in <= {mac_header[10], mac_header[9], mac_header[8], mac_header[7]};
+                                crc_data_in <= {mac_header[11], mac_header[10], mac_header[9], mac_header[8]};
                                 crc_valid_in <= 4'b1111;
                                 byte_counter <= byte_counter + 4;
                                 frame_byte_count <= frame_byte_count + 4;
@@ -236,12 +238,6 @@ module tx_mac #(
                                     fifo_rd_en <= !fifo_empty;
                                     current_state <= PAYLOAD_STATE;
                                     data_valid <= 1'b1;
-                                end else if (pad_bytes_required > 0) begin
-                                    fifo_rd_en <= 1'b0;
-                                    current_state <= PAD_STATE;
-                                end else begin
-                                    fifo_rd_en <= 1'b0;
-                                    current_state <= FCS_STATE;
                                 end
                             end
                         endcase
@@ -303,6 +299,7 @@ module tx_mac #(
 					TERMINATE_STATE: begin
 						out_xgmii_data <= {{3{XGMII_IDLE}}, XGMII_TERMINATE};
 						out_xgmii_ctl <= 4'b1111;
+						frame_valid <= 1'b1;
 						current_state <= IFG_STATE;
 					end
 					
