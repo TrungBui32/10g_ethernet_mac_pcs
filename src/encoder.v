@@ -3,8 +3,8 @@ module encoder #(
     parameter XGMII_DATA_BYTES = XGMII_DATA_WIDTH/8,
     parameter PCS_DATA_WIDTH = 66
 ) (
-    input tx_clk,
-    input tx_rst,
+    input clk,
+    input rst,
     
     input [XGMII_DATA_WIDTH-1:0] xgmii_data_in,
     input [XGMII_DATA_BYTES-1:0] xgmii_ctrl_in,
