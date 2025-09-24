@@ -53,8 +53,8 @@ module encoder #(
     end
     
     // XGMII 
-    always @(posedge tx_clk) begin
-        if (!tx_rst) begin
+    always @(posedge clk) begin
+        if (!rst) begin
             state <= IDLE;
             xgmii_data_block <= 64'h0;
             xgmii_ctrl_block <= 8'h0;
@@ -88,8 +88,8 @@ module encoder #(
     end
     
     // 64B/66B 
-    always @(posedge tx_clk) begin
-        if (!tx_rst) begin
+    always @(posedge clk) begin
+        if (!rst) begin
             encoded_data_out <= 66'h0;
             encoded_valid_out <= 1'b0;
         end else if (block_ready) begin
