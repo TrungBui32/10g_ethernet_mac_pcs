@@ -95,8 +95,6 @@ module tx_mac #(
     reg compute_padding;
 
     reg tlast_internal;
-
-    reg crc_reset;
     
     wire [7:0] mac_header [0:MAC_HEADER_SIZE-1];
 
