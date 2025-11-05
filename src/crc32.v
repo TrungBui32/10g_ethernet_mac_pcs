@@ -32,6 +32,7 @@ module crc32 #(
         end
     end
     
+    // reduction or, any valid = 0 <=> no valid bytes
     assign any_valid = |in_valid;
 
     // CRC storage
