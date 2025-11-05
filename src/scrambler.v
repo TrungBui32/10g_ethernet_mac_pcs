@@ -1,11 +1,11 @@
 module scrambler #( 
-    parameter DATA_WIDTH = 64 
+    parameter PCS_DATA_WIDTH = 64 
 )( 
     input clk, 
     input rst, 
-    input [DATA_WIDTH-1:0] data_in, 
-    input data_in_valid, 
-    output [DATA_WIDTH-1:0] data_out 
+    input [PCS_DATA_WIDTH-1:0] in_data, 
+    input in_data_valid, 
+    output [PCS_DATA_WIDTH-1:0] out_data 
 ); 
     reg [127:0] data; 
     wire [127:0] next_data;
@@ -13,17 +13,17 @@ module scrambler #(
     always @(posedge clk) begin
         if(!rst) begin
             data <= {128{1'b1}};
-        end else if(data_in_valid) begin
+        end else if(in_data_valid) begin
             data <= next_data;
         end
     end 
         
-    assign next_data = {data_out, data[63:0]};
+    assign next_data = {out_data, data[63:0]};
     
     genvar i;
     generate 
-        for(i = 0; i < DATA_WIDTH; i = i + 1) begin
-            assign data_out[i] = data_in[i] ^ data[DATA_WIDTH + i - 39] ^ data[DATA_WIDTH + i - 58];
+        for(i = 0; i < PCS_DATA_WIDTH; i = i + 1) begin
+            assign out_data[i] = in_data[i] ^ data[PCS_DATA_WIDTH + i - 39] ^ data[PCS_DATA_WIDTH + i - 58];
         end
     endgenerate
 endmodule
