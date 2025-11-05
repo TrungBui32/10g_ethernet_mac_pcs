@@ -242,20 +242,4 @@ module tb_rx_mac;
         $finish;
     end
     
-    always @(posedge rx_clk) begin
-        if (out_master_rx_tvalid && in_master_rx_tready) begin
-            $display("RX Data: 0x%08h, Keep: 0b%04b, Last: %b", 
-                     out_master_rx_tdata, out_master_rx_tkeep, out_master_rx_tlast);
-        end
-        if (frame_valid) begin
-            $display("Frame Valid detected");
-        end
-        if (frame_error) begin
-            $display("Frame Error detected");
-        end
-        if (crc_error) begin
-            $display("CRC Error detected");
-        end
-    end
-    
 endmodule
