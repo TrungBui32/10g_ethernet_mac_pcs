@@ -1,53 +1,29 @@
-module tb_descrambler(); 
-    parameter DATA_WIDTH = 64; 
-    reg clk; 
-    reg rst; 
-    reg [DATA_WIDTH-1:0] data_in; 
-    reg data_in_valid; 
-    wire [DATA_WIDTH-1:0] data_out;
-
-    initial begin
-        clk = 0;
-    end
+module descrambler #( 
+    parameter PCS_DATA_WIDTH = 64 
+)( 
+    input clk, 
+    input rst, 
+    input [PCS_DATA_WIDTH-1:0] in_data, 
+    input in_data_valid, 
+    output [PCS_DATA_WIDTH-1:0] out_data 
+); 
+    reg [127:0] data; 
+    wire [127:0] next_data;
     
-    always #5 clk = ~clk; 
+    always @(posedge clk) begin
+        if(!rst) begin
+            data <= {128{1'b1}};
+        end else if(in_data_valid) begin
+            data <= next_data;
+        end
+    end 
+        
+    assign next_data = {out_data, data[63:0]};
     
-    descrambler #(
-        .DATA_WIDTH(DATA_WIDTH)
-    ) dut (
-        .clk(clk),
-        .rst(rst), 
-        .data_in(data_in),
-        .data_in_valid(data_in_valid),
-        .data_out(data_out)
-    );
-    
-    initial begin
-        rst = 1'b0;
-        data_in = 0;
-        data_in_valid = 0;
-        @(posedge clk);
-        @(posedge clk);
-        @(posedge clk);
-        rst = 1'b1;
-        @(posedge clk);
-        data_in = 64'h7b2aaad555555555;
-        data_in_valid = 1'b1;
-        
-        @(posedge clk);
-        data_in = 64'h46ff004433221100;
-        data_in_valid = 1'b1;
-        
-        @(posedge clk);
-        data_in = 64'h5e8644a8b2070707;        
-        data_in_valid = 1'b1;
-        
-        @(posedge clk);
-        data_in_valid = 1'b0;
-        @(posedge clk);
-        @(posedge clk);
-        @(posedge clk);
-        
-        $finish;
-    end
+    genvar i;
+    generate 
+        for(i = 0; i < PCS_DATA_WIDTH; i = i + 1) begin
+            assign out_data[i] = in_data[i] ^ data[PCS_DATA_WIDTH + i - 39] ^ data[PCS_DATA_WIDTH + i - 58];
+        end
+    endgenerate
 endmodule
