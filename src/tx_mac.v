@@ -17,6 +17,7 @@ module tx_mac #(
     // XGMII
     output reg [XGMII_DATA_WIDTH-1:0] out_xgmii_data,
     output reg [XGMII_DATA_BYTES-1:0] out_xgmii_ctl,
+    output reg out_xgmii_valid,
     input in_xgmii_pcs_ready,
     
     output reg frame_error,
@@ -188,6 +189,7 @@ module tx_mac #(
                         fifo_rd_en <= 1'b0;
                         if (in_slave_tx_tvalid && out_slave_tx_tready) begin		
                             current_state <= PREAMBLE_STATE;
+                            out_xgmii_valid <= 1'b1;
                         end
                     end
                     
@@ -316,6 +318,7 @@ module tx_mac #(
 						frame_valid <= 1'b1;
 						current_state <= IFG_STATE;
                         crc_reset <= 1'b0;
+                        out_xgmii_valid <= 1'b0;
 					end
 					
                     IFG_STATE: begin
