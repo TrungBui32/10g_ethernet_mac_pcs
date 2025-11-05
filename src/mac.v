@@ -20,6 +20,7 @@ module mac #(
     
     output [XGMII_DATA_WIDTH-1:0] xgmii_tx_data,
     output [XGMII_DATA_BYTES-1:0] xgmii_tx_ctl,
+    output xgmii_tx_valid,
     input xgmii_tx_pcs_ready,
     
     output tx_frame_valid,              
@@ -38,25 +39,8 @@ module mac #(
             
     output rx_frame_valid,              
     output rx_frame_error,          
-    output rx_crc_error,          
-    
-    
-    output [31:0] stat_tx_frames,      
-    output [31:0] stat_tx_bytes,       
-    output [31:0] stat_tx_errors,      
-    output [31:0] stat_rx_frames,     
-    output [31:0] stat_rx_bytes,       
-    output [31:0] stat_rx_errors,      
-    output [31:0] stat_rx_crc_errors     
+    output rx_crc_error
 );
-    
-    reg [31:0] tx_frame_counter;
-    reg [31:0] tx_byte_counter;
-    reg [31:0] tx_error_counter;
-    reg [31:0] rx_frame_counter;
-    reg [31:0] rx_byte_counter;
-    reg [31:0] rx_error_counter;
-    reg [31:0] rx_crc_error_counter;
     
     wire tx_mac_frame_error;
     wire tx_mac_frame_valid;
@@ -72,14 +56,6 @@ module mac #(
     assign rx_frame_valid = rx_mac_frame_valid;
     assign rx_frame_error = rx_mac_frame_error;
     assign rx_crc_error = rx_mac_crc_error;
-    
-    assign stat_tx_frames = tx_frame_counter;
-    assign stat_tx_bytes = tx_byte_counter;
-    assign stat_tx_errors = tx_error_counter;
-    assign stat_rx_frames = rx_frame_counter;
-    assign stat_rx_bytes = rx_byte_counter;
-    assign stat_rx_errors = rx_error_counter;
-    assign stat_rx_crc_errors = rx_crc_error_counter;
     
     reg [3:0] tx_byte_count_current;
     reg [3:0] rx_byte_count_current;
@@ -104,41 +80,6 @@ module mac #(
         endcase
     end
     
-    always @(posedge mac_clk) begin
-        if (!mac_rst) begin
-            tx_frame_counter <= 0;
-            tx_byte_counter <= 0;
-            tx_error_counter <= 0;
-            rx_frame_counter <= 0;
-            rx_byte_counter <= 0;
-            rx_error_counter <= 0;
-            rx_crc_error_counter <= 0;
-        end else begin
-            if (tx_axis_tvalid && tx_axis_tready) begin
-                tx_byte_counter <= tx_byte_counter + tx_byte_count_current;
-                if (tx_axis_tlast) begin
-                    tx_frame_counter <= tx_frame_counter + 1;
-                end
-            end
-            
-            if (rx_axis_tvalid && rx_axis_tready) begin
-                rx_byte_counter <= rx_byte_counter + rx_byte_count_current;
-            end
-            
-            if (rx_mac_frame_valid && !rx_mac_frame_error) begin
-                rx_frame_counter <= rx_frame_counter + 1;
-            end
-            
-            if (rx_mac_frame_error) begin
-                rx_error_counter <= rx_error_counter + 1;
-            end
-            
-            if (rx_mac_crc_error) begin
-                rx_crc_error_counter <= rx_crc_error_counter + 1;
-            end
-        end
-    end
-    
     tx_mac #(
         .AXIS_DATA_WIDTH(AXIS_DATA_WIDTH),
         .AXIS_DATA_BYTES(AXIS_DATA_BYTES),
@@ -154,6 +95,7 @@ module mac #(
         .out_slave_tx_tready(tx_axis_tready),
         .out_xgmii_data(xgmii_tx_data),
         .out_xgmii_ctl(xgmii_tx_ctl),
+        .out_xgmii_valid(xgmii_tx_valid),
         .in_xgmii_pcs_ready(xgmii_tx_pcs_ready),
         .frame_valid(tx_frame_valid),
         .frame_error(tx_frame_error)
