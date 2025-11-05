@@ -1,18 +1,18 @@
 module tb_mac;
     parameter AXIS_DATA_WIDTH = 32;
     parameter AXIS_DATA_BYTES = AXIS_DATA_WIDTH / 8;
-    parameter XGMII_DATA_WIDTH = 32;
-    parameter XGMII_DATA_BYTES = XGMII_DATA_WIDTH / 8;
+    parameter xgmii_rx_data_WIDTH = 32;
+    parameter xgmii_rx_data_BYTES = xgmii_rx_data_WIDTH / 8;
     
     reg mac_clk;
     reg mac_rst;
     
-    wire [XGMII_DATA_WIDTH-1:0] xgmii_tx_data;
-    wire [XGMII_DATA_BYTES-1:0] xgmii_tx_ctl;
+    wire [xgmii_rx_data_WIDTH-1:0] xgmii_tx_data;
+    wire [xgmii_rx_data_BYTES-1:0] xgmii_tx_ctl;
     reg xgmii_tx_pcs_ready;
     
-    reg [XGMII_DATA_WIDTH-1:0] xgmii_rx_data;
-    reg [XGMII_DATA_BYTES-1:0] xgmii_rx_ctl;
+    reg [xgmii_rx_data_WIDTH-1:0] xgmii_rx_data;
+    reg [xgmii_rx_data_BYTES-1:0] xgmii_rx_ctl;
     wire xgmii_rx_pcs_ready;
     
     reg [AXIS_DATA_WIDTH-1:0] tx_axis_tdata;
@@ -54,8 +54,8 @@ module tb_mac;
     mac #(
         .AXIS_DATA_WIDTH(AXIS_DATA_WIDTH),
         .AXIS_DATA_BYTES(AXIS_DATA_BYTES),
-        .XGMII_DATA_WIDTH(XGMII_DATA_WIDTH),
-        .XGMII_DATA_BYTES(XGMII_DATA_BYTES),
+        .xgmii_rx_data_WIDTH(xgmii_rx_data_WIDTH),
+        .xgmii_rx_data_BYTES(xgmii_rx_data_BYTES),
         .LOCAL_MAC(48'hAA_BB_CC_DD_EE_FF),
         .DEFAULT_DEST_MAC(48'h00_11_22_33_44_55),
         .DEFAULT_ETHER_TYPE(16'h0800)
@@ -112,111 +112,135 @@ module tb_mac;
             @(posedge mac_clk);
         end
         
-        $display("=== Test 1: TX Frame ===");
-        @(posedge mac_clk);
+        // test tx and rx at the same time
+        //1        
+        wait (xgmii_tx_pcs_ready == 1'b1); 
+        @(posedge mac_clk); 
+        tx_axis_tdata = 32'hA1B2C3D4;
+        tx_axis_tkeep = 4'b1111;
+        tx_axis_tvalid = 1'b1;
+        tx_axis_tlast = 1'b0;
+        xgmii_rx_data = {PREAMBLE_BYTE, PREAMBLE_BYTE, PREAMBLE_BYTE, XGMII_START};
+        xgmii_rx_ctl = 4'b0001;
+        //2
+        @(posedge mac_clk); 
+        tx_axis_tdata = 32'h12345678;
+        tx_axis_tkeep = 4'b1111;
+        tx_axis_tvalid = 1'b1;
+        tx_axis_tlast = 1'b0;
+        xgmii_rx_data = {SFD_BYTE, PREAMBLE_BYTE, PREAMBLE_BYTE, PREAMBLE_BYTE};
+        xgmii_rx_ctl = 4'b0000;
+        //3
+        @(posedge mac_clk); 
         tx_axis_tdata = 32'hDEADBEEF;
         tx_axis_tkeep = 4'b1111;
         tx_axis_tvalid = 1'b1;
         tx_axis_tlast = 1'b0;
-        
-        @(posedge mac_clk);
-        while (!tx_axis_tready) @(posedge mac_clk);
+        xgmii_rx_data = 32'h33221100; 
+        xgmii_rx_ctl = 4'b0000;
+        //4
+        @(posedge mac_clk); 
+        tx_axis_tdata = 32'h87654321;
+        tx_axis_tkeep = 4'b1111;
+        tx_axis_tvalid = 1'b1;
+        tx_axis_tlast = 1'b0;
+        xgmii_rx_data = 32'hBBAA5544;
+        xgmii_rx_ctl = 4'b0000;
+        //5
+        @(posedge mac_clk); 
+        tx_axis_tdata = 32'hFEDCBA98;
+        tx_axis_tkeep = 4'b1111;
+        tx_axis_tvalid = 1'b1;
+        tx_axis_tlast = 1'b0;
+        xgmii_rx_data = 32'hFFEEDDCC;
+        xgmii_rx_ctl = 4'b0000;
+        //6
+        @(posedge mac_clk); 
+        tx_axis_tdata = 32'h55AA33CC;
+        tx_axis_tkeep = 4'b1111;
+        tx_axis_tvalid = 1'b1;
+        tx_axis_tlast = 1'b0;
+        xgmii_rx_data = 32'h00000008; 
+        xgmii_rx_ctl = 4'b0000;
+        //7
+        @(posedge mac_clk); 
+        tx_axis_tdata = 32'h9F8E7D6C;
+        tx_axis_tkeep = 4'b1111;
+        tx_axis_tvalid = 1'b1;
+        tx_axis_tlast = 1'b0;
+        xgmii_rx_data = 32'hA1B2C3D4; 
+        xgmii_rx_ctl = 4'b0000;
+        //8
+        @(posedge mac_clk); 
+        tx_axis_tdata = 32'h1A2B3C4D;
+        tx_axis_tkeep = 4'b1111;
+        tx_axis_tvalid = 1'b1;
+        tx_axis_tlast = 1'b0;
+        xgmii_rx_data = 32'h12345678; 
+        xgmii_rx_ctl = 4'b0000;
+        //9
+        @(posedge mac_clk); 
         tx_axis_tdata = 32'hCAFEBABE;
         tx_axis_tkeep = 4'b1111;
         tx_axis_tvalid = 1'b1;
         tx_axis_tlast = 1'b0;
-        
-        @(posedge mac_clk);
-        while (!tx_axis_tready) @(posedge mac_clk);
-        tx_axis_tdata = 32'h12345678;
+        xgmii_rx_data = 32'hDEADBEEF; 
+        xgmii_rx_ctl = 4'b0000;
+        //10
+        @(posedge mac_clk); 
+        tx_axis_tdata = 32'h6789ABCD;
+        tx_axis_tkeep = 4'b1111;
+        tx_axis_tvalid = 1'b1;
+        tx_axis_tlast = 1'b0;
+        xgmii_rx_data = 32'h87654321; 
+        xgmii_rx_ctl = 4'b0000;
+        //11
+        @(posedge mac_clk); 
+        tx_axis_tdata = 32'hF0E1D2C3;
+        tx_axis_tkeep = 4'b1111;
+        tx_axis_tvalid = 1'b1;
+        tx_axis_tlast = 1'b0;
+        xgmii_rx_data = 32'hFEDCBA98; 
+        xgmii_rx_ctl = 4'b0000;
+        //12
+        @(posedge mac_clk); 
+        tx_axis_tdata = 32'h3E5F7A9B;
         tx_axis_tkeep = 4'b1111;
         tx_axis_tvalid = 1'b1;
         tx_axis_tlast = 1'b1;
-        
-        @(posedge mac_clk);
-        while (!tx_axis_tready) @(posedge mac_clk);
-        tx_axis_tvalid = 1'b0;
-        tx_axis_tlast = 1'b0;
-        tx_axis_tdata = 32'h0;
-        tx_axis_tkeep = 4'b0000;
-        
-        repeat(50) @(posedge mac_clk);
-        
-        $display("=== Test 2: RX Frame ===");
-        @(posedge mac_clk);
-        xgmii_rx_data = {PREAMBLE_BYTE, PREAMBLE_BYTE, PREAMBLE_BYTE, XGMII_START};
-        xgmii_rx_ctl = 4'b0001;
-        
-        @(posedge mac_clk);
-        xgmii_rx_data = {SFD_BYTE, PREAMBLE_BYTE, PREAMBLE_BYTE, PREAMBLE_BYTE};
-        xgmii_rx_ctl = 4'b0000;
-        
-        @(posedge mac_clk);
-        xgmii_rx_data = 32'h33221100; 
-        xgmii_rx_ctl = 4'b0000;
-        
-        @(posedge mac_clk);
-        xgmii_rx_data = 32'hBBAA5544; 
-        xgmii_rx_ctl = 4'b0000;
-        
-        @(posedge mac_clk);
-        xgmii_rx_data = 32'hFFEEDDCC; 
-        xgmii_rx_ctl = 4'b0000;
-        
-        @(posedge mac_clk);
-        xgmii_rx_data = 32'h00000008;
-        xgmii_rx_ctl = 4'b0000;
-        
-        @(posedge mac_clk);
-        xgmii_rx_data = 32'hA1B2C3D4; 
-        xgmii_rx_ctl = 4'b0000;
-        
-        @(posedge mac_clk);
-        xgmii_rx_data = 32'h12345678; 
-        xgmii_rx_ctl = 4'b0000;
-        
-        @(posedge mac_clk);
-        xgmii_rx_data = 32'hDEADBEEF; 
-        xgmii_rx_ctl = 4'b0000;
-        
-        @(posedge mac_clk);
-        xgmii_rx_data = 32'h87654321; 
-        xgmii_rx_ctl = 4'b0000;
-        
-        @(posedge mac_clk);
-        xgmii_rx_data = 32'hFEDCBA98; 
-        xgmii_rx_ctl = 4'b0000;
-        
-        @(posedge mac_clk);
         xgmii_rx_data = 32'h55AA33CC; 
         xgmii_rx_ctl = 4'b0000;
-        
         @(posedge mac_clk);
+        tx_axis_tdata = 0;
+        tx_axis_tkeep = 0;
+        tx_axis_tvalid = 0;
+        tx_axis_tlast = 0;
         xgmii_rx_data = 32'h9F8E7D6C; 
         xgmii_rx_ctl = 4'b0000;
-        
+
+//8
         @(posedge mac_clk);
         xgmii_rx_data = 32'h1A2B3C4D; 
         xgmii_rx_ctl = 4'b0000;
-        
+        //9
         @(posedge mac_clk);
         xgmii_rx_data = 32'hCAFEBABE; 
         xgmii_rx_ctl = 4'b0000;
-        
+        //10
         @(posedge mac_clk);
         xgmii_rx_data = 32'h6789ABCD; 
         xgmii_rx_ctl = 4'b0000;
-        
+        //11
         @(posedge mac_clk);
         xgmii_rx_data = 32'hF0E1D2C3; 
         xgmii_rx_ctl = 4'b0000;
-        
+        //12
         @(posedge mac_clk);
         xgmii_rx_data = 32'h3E5F7A9B; 
         xgmii_rx_ctl = 4'b0000;
-        
+        //CRC
         @(posedge mac_clk);
-        xgmii_rx_data = 32'h713b28b2; 
+        xgmii_rx_data = 32'h0f0821ee; 
         xgmii_rx_ctl = 4'b0000;
         
         @(posedge mac_clk);
@@ -226,41 +250,155 @@ module tb_mac;
         @(posedge mac_clk);
         xgmii_rx_data = {4{XGMII_IDLE}};
         xgmii_rx_ctl = 4'b1111;
+
+        // second
+                //1        
+        wait (xgmii_tx_pcs_ready == 1'b1); 
+        @(posedge mac_clk); 
+        tx_axis_tdata = 32'hA1B2C3D4;
+        tx_axis_tkeep = 4'b1111;
+        tx_axis_tvalid = 1'b1;
+        tx_axis_tlast = 1'b0;
+        xgmii_rx_data = {PREAMBLE_BYTE, PREAMBLE_BYTE, PREAMBLE_BYTE, XGMII_START};
+        xgmii_rx_ctl = 4'b0001;
+        //2
+        @(posedge mac_clk); 
+        tx_axis_tdata = 32'h12345678;
+        tx_axis_tkeep = 4'b1111;
+        tx_axis_tvalid = 1'b1;
+        tx_axis_tlast = 1'b0;
+        xgmii_rx_data = {SFD_BYTE, PREAMBLE_BYTE, PREAMBLE_BYTE, PREAMBLE_BYTE};
+        xgmii_rx_ctl = 4'b0000;
+        //3
+        @(posedge mac_clk); 
+        tx_axis_tdata = 32'hDEADBEEF;
+        tx_axis_tkeep = 4'b1111;
+        tx_axis_tvalid = 1'b1;
+        tx_axis_tlast = 1'b0;
+        xgmii_rx_data = 32'h33221100; 
+        xgmii_rx_ctl = 4'b0000;
+        //4
+        @(posedge mac_clk); 
+        tx_axis_tdata = 32'h87654321;
+        tx_axis_tkeep = 4'b1111;
+        tx_axis_tvalid = 1'b1;
+        tx_axis_tlast = 1'b0;
+        xgmii_rx_data = 32'hBBAA5544;
+        xgmii_rx_ctl = 4'b0000;
+        //5
+        @(posedge mac_clk); 
+        tx_axis_tdata = 32'hFEDCBA98;
+        tx_axis_tkeep = 4'b1111;
+        tx_axis_tvalid = 1'b1;
+        tx_axis_tlast = 1'b0;
+        xgmii_rx_data = 32'hFFEEDDCC;
+        xgmii_rx_ctl = 4'b0000;
+        //6
+        @(posedge mac_clk); 
+        tx_axis_tdata = 32'h55AA33CC;
+        tx_axis_tkeep = 4'b1111;
+        tx_axis_tvalid = 1'b1;
+        tx_axis_tlast = 1'b0;
+        xgmii_rx_data = 32'h00000008; 
+        xgmii_rx_ctl = 4'b0000;
+        //7
+        @(posedge mac_clk); 
+        tx_axis_tdata = 32'h9F8E7D6C;
+        tx_axis_tkeep = 4'b1111;
+        tx_axis_tvalid = 1'b1;
+        tx_axis_tlast = 1'b0;
+        xgmii_rx_data = 32'hA1B2C3D4; 
+        xgmii_rx_ctl = 4'b0000;
+        //8
+        @(posedge mac_clk); 
+        tx_axis_tdata = 32'h1A2B3C4D;
+        tx_axis_tkeep = 4'b1111;
+        tx_axis_tvalid = 1'b1;
+        tx_axis_tlast = 1'b0;
+        xgmii_rx_data = 32'h12345678; 
+        xgmii_rx_ctl = 4'b0000;
+        //9
+        @(posedge mac_clk); 
+        tx_axis_tdata = 32'hCAFEBABE;
+        tx_axis_tkeep = 4'b1111;
+        tx_axis_tvalid = 1'b1;
+        tx_axis_tlast = 1'b0;
+        xgmii_rx_data = 32'hDEADBEEF; 
+        xgmii_rx_ctl = 4'b0000;
+        //10
+        @(posedge mac_clk); 
+        tx_axis_tdata = 32'h6789ABCD;
+        tx_axis_tkeep = 4'b1111;
+        tx_axis_tvalid = 1'b1;
+        tx_axis_tlast = 1'b0;
+        xgmii_rx_data = 32'h87654321; 
+        xgmii_rx_ctl = 4'b0000;
+        //11
+        @(posedge mac_clk); 
+        tx_axis_tdata = 32'hF0E1D2C3;
+        tx_axis_tkeep = 4'b1111;
+        tx_axis_tvalid = 1'b1;
+        tx_axis_tlast = 1'b0;
+        xgmii_rx_data = 32'hFEDCBA98; 
+        xgmii_rx_ctl = 4'b0000;
+        //12
+        @(posedge mac_clk); 
+        tx_axis_tdata = 32'h3E5F7A9B;
+        tx_axis_tkeep = 4'b1111;
+        tx_axis_tvalid = 1'b1;
+        tx_axis_tlast = 1'b1;
+        xgmii_rx_data = 32'h55AA33CC; 
+        xgmii_rx_ctl = 4'b0000;
+        @(posedge mac_clk);
+        tx_axis_tdata = 0;
+        tx_axis_tkeep = 0;
+        tx_axis_tvalid = 0;
+        tx_axis_tlast = 0;
+        xgmii_rx_data = 32'h9F8E7D6C; 
+        xgmii_rx_ctl = 4'b0000;
+
+        //8
+        @(posedge mac_clk);
+        xgmii_rx_data = 32'h1A2B3C4D; 
+        xgmii_rx_ctl = 4'b0000;
+        //9
+        @(posedge mac_clk);
+        xgmii_rx_data = 32'hCAFEBABE; 
+        xgmii_rx_ctl = 4'b0000;
+        //10
+        @(posedge mac_clk);
+        xgmii_rx_data = 32'h6789ABCD; 
+        xgmii_rx_ctl = 4'b0000;
+        //11
+        @(posedge mac_clk);
+        xgmii_rx_data = 32'hF0E1D2C3; 
+        xgmii_rx_ctl = 4'b0000;
+        //12
+        @(posedge mac_clk);
+        xgmii_rx_data = 32'h3E5F7A9B; 
+        xgmii_rx_ctl = 4'b0000;
+        //CRC
+        @(posedge mac_clk);
+        xgmii_rx_data = 32'h0f0821ee; 
+        xgmii_rx_ctl = 4'b0000;
         
-        repeat(20) @(posedge mac_clk);
+        @(posedge mac_clk);
+        xgmii_rx_data = {XGMII_TERMINATE, {3{XGMII_IDLE}}};
+        xgmii_rx_ctl = 4'b1111;
         
-        $display("=== Statistics ===");
-        $display("TX Frames: %d", stat_tx_frames);
-        $display("TX Bytes: %d", stat_tx_bytes);
-        $display("RX Frames: %d", stat_rx_frames);
-        $display("RX Bytes: %d", stat_rx_bytes);
+        @(posedge mac_clk);
+        xgmii_rx_data = {4{XGMII_IDLE}};
+        xgmii_rx_ctl = 4'b1111;
+                
+        wait (xgmii_tx_pcs_ready == 1'b1); 
+        @(posedge mac_clk);
+
+        tx_axis_tvalid = 1'b0;
+        tx_axis_tlast = 1'b0;
         
+        
+        #500; 
         $finish;
-    end
-    
-    always @(posedge mac_clk) begin
-        if (xgmii_tx_ctl[0] && xgmii_tx_data[7:0] == XGMII_START) begin
-            $display("TX Frame Start detected");
-        end
-        if (xgmii_tx_data[31:24] == XGMII_TERMINATE && xgmii_tx_ctl[3]) begin
-            $display("TX Frame End detected");
-        end
-    end
-    
-    always @(posedge mac_clk) begin
-        if (rx_axis_tvalid && rx_axis_tready) begin
-            $display("RX Data: 0x%08h, Keep: 0b%04b, Last: %b", 
-                     rx_axis_tdata, rx_axis_tkeep, rx_axis_tlast);
-        end
-        if (rx_frame_valid) begin
-            $display("RX Frame Valid detected");
-        end
-        if (rx_frame_error) begin
-            $display("RX Frame Error detected");
-        end
-        if (rx_crc_error) begin
-            $display("RX CRC Error detected");
-        end
     end
     
 endmodule
