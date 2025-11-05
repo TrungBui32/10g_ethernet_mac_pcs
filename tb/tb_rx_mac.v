@@ -139,7 +139,93 @@ module tb_rx_mac;
         in_xgmii_ctl = 4'b0000;
         //CRC
         @(posedge rx_clk);
-        in_xgmii_data = 32'h713b28b2; 
+        in_xgmii_data = 32'h0f0821ee; 
+        in_xgmii_ctl = 4'b0000;
+        
+        @(posedge rx_clk);
+        in_xgmii_data = {XGMII_TERMINATE, {3{XGMII_IDLE}}};
+        in_xgmii_ctl = 4'b1111;
+        
+        @(posedge rx_clk);
+        in_xgmii_data = {4{XGMII_IDLE}};
+        in_xgmii_ctl = 4'b1111;
+
+
+
+        @(posedge rx_clk);
+        in_xgmii_data = {PREAMBLE_BYTE, PREAMBLE_BYTE, PREAMBLE_BYTE, XGMII_START};
+        in_xgmii_ctl = 4'b0001;
+        
+        @(posedge rx_clk);
+        in_xgmii_data = {SFD_BYTE, PREAMBLE_BYTE, PREAMBLE_BYTE, PREAMBLE_BYTE};
+        in_xgmii_ctl = 4'b0000;
+        
+        @(posedge rx_clk);
+        in_xgmii_data = 32'h33221100; 
+        in_xgmii_ctl = 4'b0000;
+        
+        @(posedge rx_clk);
+        in_xgmii_data = 32'hBBAA5544;
+        in_xgmii_ctl = 4'b0000;
+        
+        @(posedge rx_clk);
+        in_xgmii_data = 32'hFFEEDDCC;
+        in_xgmii_ctl = 4'b0000;
+        
+        @(posedge rx_clk);
+        in_xgmii_data = 32'h00000008; 
+        in_xgmii_ctl = 4'b0000;
+        //1
+        @(posedge rx_clk);
+        in_xgmii_data = 32'hA1B2C3D4; 
+        in_xgmii_ctl = 4'b0000;
+        //2
+        @(posedge rx_clk);
+        in_xgmii_data = 32'h12345678; 
+        in_xgmii_ctl = 4'b0000;
+        //3
+        @(posedge rx_clk);
+        in_xgmii_data = 32'hDEADBEEF; 
+        in_xgmii_ctl = 4'b0000;
+        //4
+        @(posedge rx_clk);
+        in_xgmii_data = 32'h87654321; 
+        in_xgmii_ctl = 4'b0000;
+        //5
+        @(posedge rx_clk);
+        in_xgmii_data = 32'hFEDCBA98; 
+        in_xgmii_ctl = 4'b0000;
+        //6
+        @(posedge rx_clk);
+        in_xgmii_data = 32'h55AA33CC; 
+        in_xgmii_ctl = 4'b0000;
+        //7
+        @(posedge rx_clk);
+        in_xgmii_data = 32'h9F8E7D6C; 
+        in_xgmii_ctl = 4'b0000;
+        //8
+        @(posedge rx_clk);
+        in_xgmii_data = 32'h1A2B3C4D; 
+        in_xgmii_ctl = 4'b0000;
+        //9
+        @(posedge rx_clk);
+        in_xgmii_data = 32'hCAFEBABE; 
+        in_xgmii_ctl = 4'b0000;
+        //10
+        @(posedge rx_clk);
+        in_xgmii_data = 32'h6789ABCD; 
+        in_xgmii_ctl = 4'b0000;
+        //11
+        @(posedge rx_clk);
+        in_xgmii_data = 32'hF0E1D2C3; 
+        in_xgmii_ctl = 4'b0000;
+        //12
+        @(posedge rx_clk);
+        in_xgmii_data = 32'h3E5F7A9B; 
+        in_xgmii_ctl = 4'b0000;
+        //CRC
+        @(posedge rx_clk);
+        in_xgmii_data = 32'h0f0821ee; 
         in_xgmii_ctl = 4'b0000;
         
         @(posedge rx_clk);
