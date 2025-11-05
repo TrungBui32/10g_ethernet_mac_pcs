@@ -75,7 +75,7 @@ module tx_mac #(
     
     assign fifo_tdata = fifo_rd_data[AXIS_DATA_WIDTH-1:0];
     assign fifo_tkeep = fifo_rd_data[FIFO_DATA_WIDTH-1:AXIS_DATA_WIDTH];
-    assign out_slave_tx_tready = !fifo_full; 
+    assign out_slave_tx_tready = !fifo_full && !tlast_internal; 
     
     reg [15:0] payload_length;
     reg [7:0] pad_bytes_required;
@@ -92,27 +92,29 @@ module tx_mac #(
     reg [3:0] crc_valid_in;
     
     reg compute_padding;
+
+    reg tlast_internal;
     
-    reg [7:0] mac_header [0:MAC_HEADER_SIZE-1];
-    initial begin
-        mac_header[0]  = DEST_MAC[47:40]; 
-        mac_header[1]  = DEST_MAC[39:32]; 
-        mac_header[2]  = DEST_MAC[31:24]; 
-        mac_header[3]  = DEST_MAC[23:16]; 
-        mac_header[4]  = DEST_MAC[15:8];  
-        mac_header[5]  = DEST_MAC[7:0];   
-        mac_header[6]  = SRC_MAC[47:40];  
-        mac_header[7]  = SRC_MAC[39:32];  
-        mac_header[8]  = SRC_MAC[31:24];  
-        mac_header[9]  = SRC_MAC[23:16];  
-        mac_header[10] = SRC_MAC[15:8];  
-        mac_header[11] = SRC_MAC[7:0];   
-        mac_header[12] = ETHER_TYPE[15:8]; 
-        mac_header[13] = ETHER_TYPE[7:0];  
-    end
+    wire [7:0] mac_header [0:MAC_HEADER_SIZE-1];
+
+    assign mac_header[0]  = DEST_MAC[47:40]; 
+    assign mac_header[1]  = DEST_MAC[39:32]; 
+    assign mac_header[2]  = DEST_MAC[31:24]; 
+    assign mac_header[3]  = DEST_MAC[23:16]; 
+    assign mac_header[4]  = DEST_MAC[15:8];  
+    assign mac_header[5]  = DEST_MAC[7:0];   
+    assign mac_header[6]  = SRC_MAC[47:40];  
+    assign mac_header[7]  = SRC_MAC[39:32];  
+    assign mac_header[8]  = SRC_MAC[31:24];  
+    assign mac_header[9]  = SRC_MAC[23:16];  
+    assign mac_header[10] = SRC_MAC[15:8];  
+    assign mac_header[11] = SRC_MAC[7:0];   
+    assign mac_header[12] = ETHER_TYPE[15:8]; 
+    assign mac_header[13] = ETHER_TYPE[7:0];  
     
     integer i, j;
     
+    // Write data to FIFO, aka receive from AXIS
     always @(posedge tx_clk) begin
         if (!tx_rst) begin 
             fifo_wr_en <= 1'b0;
@@ -122,6 +124,8 @@ module tx_mac #(
             compute_padding <= 0;
         end else begin 
             fifo_wr_en <= 1'b0;
+
+            // compute padding requirement
             if(compute_padding) begin
                 if (payload_length < MIN_PAYLOAD_SIZE) begin
                     pad_bytes_required <= MIN_PAYLOAD_SIZE - payload_length[7:0];
@@ -133,6 +137,8 @@ module tx_mac #(
                 compute_padding <= 0;
                 payload_length <= 0;
             end
+
+            // start transmit data to FIFO
             if (out_slave_tx_tready && in_slave_tx_tvalid) begin
                 fifo_wr_en <= 1'b1;
                 fifo_wr_data <= {in_slave_tx_tkeep, in_slave_tx_tdata};
@@ -165,8 +171,8 @@ module tx_mac #(
             current_keep <= 0;
             data_valid <= 1'b0;
             last_word <= 1'b0;
+            tlast_internal <= 0;
         end else begin 
-            
             if (in_xgmii_pcs_ready) begin
                 case (current_state)
                     IDLE_STATE: begin
@@ -245,7 +251,9 @@ module tx_mac #(
                     
                     PAYLOAD_STATE: begin
                         out_xgmii_ctl <= 4'b0000;
-                        
+                        if(in_slave_tx_tlast) begin
+                            tlast_internal <= 1;
+                        end
                         if (data_valid) begin
                             out_xgmii_data <= fifo_tdata;
                             crc_data_in <= fifo_tdata;
@@ -270,7 +278,7 @@ module tx_mac #(
                         out_xgmii_ctl <= 4'b0000;
                         out_xgmii_data <= 32'h00000000;
                         crc_data_in <= 32'h00000000;
-                        
+                        tlast_internal <= 0;
                         if (byte_counter + 4 >= pad_bytes_required) begin
                             case (pad_bytes_required - byte_counter)
                                 1: crc_valid_in <= 4'b0001;
@@ -294,6 +302,7 @@ module tx_mac #(
                         frame_byte_count <= frame_byte_count + 4;
                         current_state <= TERMINATE_STATE;
                         crc_valid_in <= 4'b0000;
+                        tlast_internal <= 0;
                     end
                     
 					TERMINATE_STATE: begin
@@ -318,7 +327,6 @@ module tx_mac #(
                     ERROR_STATE: begin
                         out_xgmii_data <= {{3{XGMII_IDLE}}, XGMII_ERROR};
                         out_xgmii_ctl <= 4'b1001;
-                        frame_error <= 1'b0;
                     end
                     
                     default: 
@@ -328,17 +336,14 @@ module tx_mac #(
         end
     end 
     
-    sync_fifo #(
-        .DATA_WIDTH(FIFO_DATA_WIDTH),
-        .ADDR_WIDTH(FIFO_ADDR_WIDTH),
-        .FIFO_DEPTH(FIFO_DEPTH)
-    ) frame_buffer (
+    // 4 tkeep bits + 32 tdata bits
+    fifo_generator_0 fifo (
         .clk(tx_clk),
-        .rst(tx_rst),
+        .srst(!tx_rst),
+        .din(fifo_wr_data),
         .wr_en(fifo_wr_en),
-        .wr_data(fifo_wr_data),
+        .dout(fifo_rd_data),
         .rd_en(fifo_rd_en),
-        .rd_data(fifo_rd_data),
         .full(fifo_full),
         .empty(fifo_empty)
     );
