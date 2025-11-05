@@ -9,7 +9,8 @@ module crc32 #(
     input rst,
     input [8*SLICE_LENGTH-1:0] in_data,
     input [SLICE_LENGTH-1:0] in_valid,
-    output [31:0] out_crc
+    output [31:0] out_crc,
+    input in_crc_reset
     );
     
     localparam NUM_INPUT_BYTES_WIDTH = $clog2(SLICE_LENGTH) + 1;
@@ -40,7 +41,7 @@ module crc32 #(
     wire [31:0] crc_out;
     
     always @(posedge clk) begin
-        if (!rst) begin
+        if (!rst || in_crc_reset) begin
             prev_crc <= INITIAL_CRC;
         end else if (any_valid) begin
             prev_crc <= crc_calc;

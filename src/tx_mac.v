@@ -94,6 +94,8 @@ module tx_mac #(
     reg compute_padding;
 
     reg tlast_internal;
+
+    reg crc_reset;
     
     wire [7:0] mac_header [0:MAC_HEADER_SIZE-1];
 
@@ -172,6 +174,7 @@ module tx_mac #(
             data_valid <= 1'b0;
             last_word <= 1'b0;
             tlast_internal <= 0;
+            crc_reset <= 0;
         end else begin 
             if (in_xgmii_pcs_ready) begin
                 case (current_state)
@@ -279,6 +282,7 @@ module tx_mac #(
                         out_xgmii_data <= 32'h00000000;
                         crc_data_in <= 32'h00000000;
                         tlast_internal <= 0;
+                        crc_reset <= 1'b1;
                         if (byte_counter + 4 >= pad_bytes_required) begin
                             case (pad_bytes_required - byte_counter)
                                 1: crc_valid_in <= 4'b0001;
@@ -303,6 +307,7 @@ module tx_mac #(
                         current_state <= TERMINATE_STATE;
                         crc_valid_in <= 4'b0000;
                         tlast_internal <= 0;
+                        crc_reset <= 1'b1;
                     end
                     
 					TERMINATE_STATE: begin
@@ -310,6 +315,7 @@ module tx_mac #(
 						out_xgmii_ctl <= 4'b1111;
 						frame_valid <= 1'b1;
 						current_state <= IFG_STATE;
+                        crc_reset <= 1'b0;
 					end
 					
                     IFG_STATE: begin
@@ -358,7 +364,8 @@ module tx_mac #(
         .rst(crc_reset),
         .in_data(crc_data_in),
         .in_valid(crc_valid_in),
-        .out_crc(crc_out)
+        .out_crc(crc_out),
+        .in_crc_reset(crc_reset)
     );
     
 endmodule
