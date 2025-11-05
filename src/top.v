@@ -31,7 +31,7 @@ module top #(
     
     input [PCS_DATA_WIDTH-1:0] phy_rx_data,
     input phy_rx_valid,
-    output phy_rx_ready,
+    input [1:0] phy_rx_header,
     
     input [47:0] config_local_mac,
     input [47:0] config_dest_mac,
@@ -132,10 +132,10 @@ module top #(
         
         .rx_pcs_data(phy_rx_data),
         .rx_pcs_valid(phy_rx_valid),
-        .rx_pcs_ready(phy_rx_ready),
+        .rx_pcs_header(phy_rx_header),
         
         .rx_xgmii_data(xgmii_rx_data),
-        .rx_xgmii_ctrl(xgmii_rx_ctrl),
+        .rx_xgmii_ctl(xgmii_rx_ctrl),
         .rx_xgmii_valid(xgmii_rx_valid),
         .rx_xgmii_ready(xgmii_rx_ready)
     );    
