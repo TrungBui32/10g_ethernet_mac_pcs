@@ -1,18 +1,19 @@
 module encoder #(
     parameter XGMII_DATA_WIDTH = 32,
     parameter XGMII_DATA_BYTES = XGMII_DATA_WIDTH/8,
-    parameter PCS_DATA_WIDTH = 66
+    parameter PCS_DATA_WIDTH = 64
 ) (
     input clk,
     input rst,
     
-    input [XGMII_DATA_WIDTH-1:0] xgmii_data_in,
-    input [XGMII_DATA_BYTES-1:0] xgmii_ctrl_in,
-    output xgmii_ready,
+    input [XGMII_DATA_WIDTH-1:0] in_xgmii_data,
+    input [XGMII_DATA_BYTES-1:0] in_xgmii_ctl,
+    input in_xgmii_valid,
+    output out_xgmii_ready,
     
-    output reg [PCS_DATA_WIDTH-1:0] encoded_data_out,
-    output reg encoded_valid_out,
-    input encoded_ready_in
+    output reg [PCS_DATA_WIDTH-1:0] out_encoded_data,
+    output reg [1:0] out_encoded_header,
+    output reg out_encoded_valid
 );
 
     localparam SYNC_DATA = 2'b01;      // Data 
@@ -46,7 +47,7 @@ module encoder #(
     reg [7:0] xgmii_ctrl_block;
     reg block_ready;
     
-    assign xgmii_ready = state == FIRST;
+    assign out_xgmii_ready = state == FIRST;
     
     // XGMII 
     always @(posedge clk) begin
@@ -59,26 +60,21 @@ module encoder #(
             case (state)
                 FIRST: begin
                     block_ready <= 1'b0;
-                    if (encoded_ready_in) begin
-                        xgmii_data_block[31:0] <= xgmii_data_in;
-                        xgmii_ctrl_block[3:0] <= xgmii_ctrl_in;
+                    if (in_xgmii_valid) begin
+                        xgmii_data_block[31:0] <= in_xgmii_data;
+                        xgmii_ctrl_block[3:0] <= in_xgmii_ctl;
                         state <= SECOND;
                     end
                 end
                 
                 SECOND: begin
-                    if (encoded_ready_in) begin
-                        xgmii_data_block[63:32] <= xgmii_data_in;
-                        xgmii_ctrl_block[7:4] <= xgmii_ctrl_in;
+                    if (in_xgmii_valid) begin
+                        xgmii_data_block[63:32] <= in_xgmii_data;
+                        xgmii_ctrl_block[7:4] <= in_xgmii_ctl;
                         block_ready <= 1'b1;
                         state <= FIRST;
                     end
                 end
-                
-//                ENCODE: begin
-//                    block_ready <= 1'b0;
-//                    state <= IDLE;
-//                end
             endcase
         end
     end
@@ -86,85 +82,86 @@ module encoder #(
     // 64B/66B 
     always @(posedge clk) begin
         if (!rst) begin
-            encoded_data_out <= 66'h0;
-            encoded_valid_out <= 1'b0;
+            out_encoded_data <= 66'h0;
+            out_encoded_valid <= 1'b0;
         end else if (block_ready) begin
-            encoded_valid_out <= 1'b1;
+            out_encoded_valid <= 1'b1;
             if (xgmii_ctrl_block == 8'h00) begin
-                encoded_data_out <= {SYNC_DATA, xgmii_data_block};
+                out_encoded_header <= SYNC_DATA;
+                out_encoded_data <= {xgmii_data_block};
             end else begin
-                encoded_data_out[65:64] <= SYNC_CTRL;
+                out_encoded_header <= SYNC_CTRL;
                 casez (xgmii_ctrl_block)
                     8'b11111111: begin 			// C0 and T0
 						if(xgmii_data_block[7:0] == 8'hFD) begin 		// T0, 8'hFD == XGMII_TERMINATE
-							encoded_data_out[63:56] <= BLOCK_TYPE_T0;
-							encoded_data_out[55:0] <= {7{XGMII_IDLE}};
+							out_encoded_data[63:56] <= BLOCK_TYPE_T0;
+							out_encoded_data[55:0] <= {7{XGMII_IDLE}};
 						end else begin 									// C0
-							encoded_data_out[63:56] <= BLOCK_TYPE_C0;
-							encoded_data_out[55:0] <= {7{XGMII_IDLE}};
+							out_encoded_data[63:56] <= BLOCK_TYPE_C0;
+							out_encoded_data[55:0] <= {7{XGMII_IDLE}};
 						end
                     end
                     
                     8'b00011111: begin 
-                        encoded_data_out[63:56] <= BLOCK_TYPE_S4;
-                        encoded_data_out[55:32] <= xgmii_data_block[31:8];
-                        encoded_data_out[31:0] <= xgmii_data_block[63:32];
+                        out_encoded_data[63:56] <= BLOCK_TYPE_S4;
+                        out_encoded_data[55:32] <= xgmii_data_block[31:8];
+                        out_encoded_data[31:0] <= xgmii_data_block[63:32];
                     end
                     
                     8'b00000001: begin 
-                        encoded_data_out[63:56] <= BLOCK_TYPE_S0;
-                        encoded_data_out[55:0] <= xgmii_data_block[63:8];
+                        out_encoded_data[63:56] <= BLOCK_TYPE_S0;
+                        out_encoded_data[55:0] <= xgmii_data_block[63:8];
                     end
                     
                     8'b11111110: begin 
-                        encoded_data_out[63:56] <= BLOCK_TYPE_T1;
-                        encoded_data_out[55:48] <= xgmii_data_block[7:0];
-                        encoded_data_out[47:0] <= {6{XGMII_IDLE}};
+                        out_encoded_data[63:56] <= BLOCK_TYPE_T1;
+                        out_encoded_data[55:48] <= xgmii_data_block[7:0];
+                        out_encoded_data[47:0] <= {6{XGMII_IDLE}};
                     end
                     
                     8'b11111100: begin 
-                        encoded_data_out[63:56] <= BLOCK_TYPE_T2;
-                        encoded_data_out[55:40] <= xgmii_data_block[15:0];
-                        encoded_data_out[39:0] <= {5{XGMII_IDLE}};
+                        out_encoded_data[63:56] <= BLOCK_TYPE_T2;
+                        out_encoded_data[55:40] <= xgmii_data_block[15:0];
+                        out_encoded_data[39:0] <= {5{XGMII_IDLE}};
                     end
                     
                     8'b11111000: begin 
-                        encoded_data_out[63:56] <= BLOCK_TYPE_T3;
-                        encoded_data_out[55:32] <= xgmii_data_block[23:0];
-                        encoded_data_out[31:0] <= {4{XGMII_IDLE}};
+                        out_encoded_data[63:56] <= BLOCK_TYPE_T3;
+                        out_encoded_data[55:32] <= xgmii_data_block[23:0];
+                        out_encoded_data[31:0] <= {4{XGMII_IDLE}};
                     end
                     
                     8'b11110000: begin 
-                        encoded_data_out[63:56] <= BLOCK_TYPE_T4;
-                        encoded_data_out[55:24] <= xgmii_data_block[31:0];
-                        encoded_data_out[23:0] <= {3{XGMII_IDLE}};
+                        out_encoded_data[63:56] <= BLOCK_TYPE_T4;
+                        out_encoded_data[55:24] <= xgmii_data_block[31:0];
+                        out_encoded_data[23:0] <= {3{XGMII_IDLE}};
                     end
                     
                     8'b11100000: begin 
-                        encoded_data_out[63:56] <= BLOCK_TYPE_T5;
-                        encoded_data_out[55:16] <= xgmii_data_block[39:0];
-                        encoded_data_out[15:0] <= {2{XGMII_IDLE}};
+                        out_encoded_data[63:56] <= BLOCK_TYPE_T5;
+                        out_encoded_data[55:16] <= xgmii_data_block[39:0];
+                        out_encoded_data[15:0] <= {2{XGMII_IDLE}};
                     end
                     
                     8'b11000000: begin
-                        encoded_data_out[63:56] <= BLOCK_TYPE_T6;
-                        encoded_data_out[55:8] <= xgmii_data_block[47:0];
-                        encoded_data_out[7:0] <= XGMII_IDLE;
+                        out_encoded_data[63:56] <= BLOCK_TYPE_T6;
+                        out_encoded_data[55:8] <= xgmii_data_block[47:0];
+                        out_encoded_data[7:0] <= XGMII_IDLE;
                     end
                     
                     8'b10000000: begin 
-                        encoded_data_out[63:56] <= BLOCK_TYPE_T7;
-                        encoded_data_out[55:0] <= xgmii_data_block[55:0];
+                        out_encoded_data[63:56] <= BLOCK_TYPE_T7;
+                        out_encoded_data[55:0] <= xgmii_data_block[55:0];
                     end
                     
                     default: begin  
-                        encoded_data_out[63:56] <= BLOCK_TYPE_C0;
-                        encoded_data_out[55:0] <= {7{XGMII_ERROR}};
+                        out_encoded_data[63:56] <= BLOCK_TYPE_C0;
+                        out_encoded_data[55:0] <= {7{XGMII_ERROR}};
                     end
                 endcase
             end
         end else begin
-            encoded_valid_out <= 1'b0;
+            out_encoded_valid <= 1'b0;
         end
     end
 

@@ -1,18 +1,19 @@
 module decoder #(
-    parameter PCS_DATA_WIDTH = 66,
     parameter XGMII_DATA_WIDTH = 32,
-    parameter XGMII_DATA_BYTES = XGMII_DATA_WIDTH/8
+    parameter XGMII_DATA_BYTES = XGMII_DATA_WIDTH/8,
+    parameter PCS_DATA_WIDTH = 64
 ) (
     input clk,
     input rst,
     
-    input [PCS_DATA_WIDTH-1:0] encoded_data_in,
-    input encoded_valid_in,
+    input [PCS_DATA_WIDTH-1:0] in_encoded_data,
+    input [1:0] in_encoded_header,
+    input in_encoded_valid,
     
-    output reg [XGMII_DATA_WIDTH-1:0] xgmii_data_out,
-    output reg [XGMII_DATA_BYTES-1:0] xgmii_ctrl_out,
-    output reg xgmii_valid_out,
-    input xgmii_ready_in
+    output reg [XGMII_DATA_WIDTH-1:0] out_xgmii_data,
+    output reg [XGMII_DATA_BYTES-1:0] out_xgmii_ctl,
+    output reg out_xgmii_valid,
+    input in_xgmii_ready
 );
 
     localparam SYNC_DATA = 2'b01;
@@ -54,28 +55,28 @@ module decoder #(
             block_valid <= 1'b0;
             decode_error <= 1'b0;
             
-            if (encoded_valid_in) begin 
+            if (in_encoded_valid) begin 
                 block_valid <= 1'b1;
-                case (encoded_data_in[65:64])
+                case (in_encoded_header)
                     SYNC_DATA: begin
-                        decoded_data <= encoded_data_in[63:0];
+                        decoded_data <= in_encoded_data[63:0];
                         decoded_ctrl <= 8'h00; // All data
                     end
                     
                     SYNC_CTRL: begin
-                        case (encoded_data_in[63:56])
+                        case (in_encoded_data[63:56])
                             BLOCK_TYPE_C0: begin
-                                decoded_data <= {{7{XGMII_IDLE}}, encoded_data_in[55:48]};
+                                decoded_data <= {{7{XGMII_IDLE}}, in_encoded_data[55:48]};
                                 decoded_ctrl <= 8'hFF; 
                             end
                             
                             BLOCK_TYPE_S0: begin
-                                decoded_data <= {encoded_data_in[55:0], XGMII_START};
+                                decoded_data <= {in_encoded_data[55:0], XGMII_START};
                                 decoded_ctrl <= 8'h01; 
                             end
                             
                             BLOCK_TYPE_S4: begin
-                                decoded_data <= {encoded_data_in[31:0], XGMII_START, encoded_data_in[55:32]};
+                                decoded_data <= {in_encoded_data[31:0], XGMII_START, in_encoded_data[55:32]};
                                 decoded_ctrl <= 8'h10; 
                             end
                             
@@ -85,37 +86,37 @@ module decoder #(
                             end
                             
                             BLOCK_TYPE_T1: begin
-                                decoded_data <= {{6{XGMII_IDLE}}, XGMII_TERMINATE, encoded_data_in[55:48]};
+                                decoded_data <= {{6{XGMII_IDLE}}, XGMII_TERMINATE, in_encoded_data[55:48]};
                                 decoded_ctrl <= 8'hFE; 
                             end
                             
                             BLOCK_TYPE_T2: begin
-                                decoded_data <= {{5{XGMII_IDLE}}, XGMII_TERMINATE, encoded_data_in[55:40]};
+                                decoded_data <= {{5{XGMII_IDLE}}, XGMII_TERMINATE, in_encoded_data[55:40]};
                                 decoded_ctrl <= 8'hFC; 
                             end
                             
                             BLOCK_TYPE_T3: begin
-                                decoded_data <= {{4{XGMII_IDLE}}, XGMII_TERMINATE, encoded_data_in[55:32]};
+                                decoded_data <= {{4{XGMII_IDLE}}, XGMII_TERMINATE, in_encoded_data[55:32]};
                                 decoded_ctrl <= 8'hF8; 
                             end
                             
                             BLOCK_TYPE_T4: begin
-                                decoded_data <= {{3{XGMII_IDLE}}, XGMII_TERMINATE, encoded_data_in[55:24]};
+                                decoded_data <= {{3{XGMII_IDLE}}, XGMII_TERMINATE, in_encoded_data[55:24]};
                                 decoded_ctrl <= 8'hF0; 
                             end
                             
                             BLOCK_TYPE_T5: begin
-                                decoded_data <= {{2{XGMII_IDLE}}, XGMII_TERMINATE, encoded_data_in[55:16]};
+                                decoded_data <= {{2{XGMII_IDLE}}, XGMII_TERMINATE, in_encoded_data[55:16]};
                                 decoded_ctrl <= 8'hE0;
                             end
                             
                             BLOCK_TYPE_T6: begin
-                                decoded_data <= {XGMII_IDLE, XGMII_TERMINATE, encoded_data_in[55:8]};
+                                decoded_data <= {XGMII_IDLE, XGMII_TERMINATE, in_encoded_data[55:8]};
                                 decoded_ctrl <= 8'hC0; 
                             end
                             
                             BLOCK_TYPE_T7: begin
-                                decoded_data <= {XGMII_TERMINATE, encoded_data_in[55:0]};
+                                decoded_data <= {XGMII_TERMINATE, in_encoded_data[55:0]};
                                 decoded_ctrl <= 8'h80; 
                             end
                             
@@ -140,25 +141,25 @@ module decoder #(
     always @(posedge clk) begin
         if (!rst) begin
             state <= FIRST;
-            xgmii_data_out <= {XGMII_DATA_WIDTH{1'b0}};
-            xgmii_ctrl_out <= {XGMII_DATA_BYTES{1'b0}};
-            xgmii_valid_out <= 1'b0;
+            out_xgmii_data <= {XGMII_DATA_WIDTH{1'b0}};
+            out_xgmii_ctl <= {XGMII_DATA_BYTES{1'b0}};
+            out_xgmii_valid <= 1'b0;
         end else begin
             case (state)
                 FIRST: begin
-                    xgmii_valid_out <= 1'b0;
-                    if (block_valid && xgmii_ready_in) begin
-                        xgmii_data_out <= decoded_data[31:0];
-                        xgmii_ctrl_out <= decoded_ctrl[3:0];
-                        xgmii_valid_out <= 1'b1;
+                    out_xgmii_valid <= 1'b0;
+                    if (block_valid && in_xgmii_ready) begin
+                        out_xgmii_data <= decoded_data[31:0];
+                        out_xgmii_ctl <= decoded_ctrl[3:0];
+                        out_xgmii_valid <= 1'b1;
                         state <= SECOND;
                     end
                 end
                 
                 SECOND: begin
-                    xgmii_data_out <= decoded_data[63:32];
-                    xgmii_ctrl_out <= decoded_ctrl[7:4];
-                    xgmii_valid_out <= 1'b1;
+                    out_xgmii_data <= decoded_data[63:32];
+                    out_xgmii_ctl <= decoded_ctrl[7:4];
+                    out_xgmii_valid <= 1'b1;
                     state <= FIRST;
                 end
                 
