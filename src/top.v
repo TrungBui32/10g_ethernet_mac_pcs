@@ -128,6 +128,7 @@ module top #(
         .in_tx_xgmii_ctl(xgmii_tx_ctrl),
         
         .tx_pcs_data(phy_tx_data),
+        .tx_pcs_data_valid(phy_tx_valid),
         .tx_pcs_ready(phy_tx_ready),
         
         .rx_pcs_data(phy_rx_data),

@@ -14,6 +14,7 @@ module pcs #(
     
     // ouput of pcs to gearbox
     output [PCS_DATA_WIDTH-1:0] tx_pcs_data,
+    output tx_pcs_data_valid,
     input tx_pcs_ready,
     
     // input from gearbox to pcs
@@ -44,6 +45,7 @@ module pcs #(
     wire [PCS_DATA_WIDTH-1:0] scrambler_in_data;
     wire scrambler_in_data_valid;
     wire [PCS_DATA_WIDTH-1:0] scrambled_data;
+    wire scramber_out_data_valid;
 
     // descrambler signals
     wire descrambler_clk;
@@ -97,6 +99,7 @@ module pcs #(
     assign rx_xgmii_data = decoder_xgmii_data;
     assign rx_xgmii_ctl = decoder_xgmii_ctl;
     assign rx_xgmii_valid = decoder_xgmii_valid;
+    assign tx_pcs_data_valid = scramber_out_data_valid;
 
     encoder encoder_inst (
         .clk(encoder_clk),
@@ -115,7 +118,8 @@ module pcs #(
         .rst(scrambler_rst),
         .in_data(scrambler_in_data),
         .in_data_valid(scrambler_in_data_valid),
-        .out_data(scrambled_data)
+        .out_data(scrambled_data),
+        .out_data_valid(scramber_out_data_valid)
     );
     
     descrambler descrambler_inst (

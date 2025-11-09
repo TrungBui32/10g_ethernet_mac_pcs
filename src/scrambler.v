@@ -5,7 +5,8 @@ module scrambler #(
     input rst, 
     input [PCS_DATA_WIDTH-1:0] in_data, 
     input in_data_valid, 
-    output [PCS_DATA_WIDTH-1:0] out_data 
+    output [PCS_DATA_WIDTH-1:0] out_data,
+    output reg out_data_valid
 ); 
     reg [127:0] data; 
     wire [127:0] next_data;
@@ -15,6 +16,9 @@ module scrambler #(
             data <= {128{1'b1}};
         end else if(in_data_valid) begin
             data <= next_data;
+            out_data_valid <= 1'b1;
+        end else begin
+            out_data_valid <= 1'b0;
         end
     end 
         
