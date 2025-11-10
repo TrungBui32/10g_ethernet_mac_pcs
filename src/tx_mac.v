@@ -174,6 +174,7 @@ module tx_mac #(
             last_word <= 1'b0;
             tlast_internal <= 0;
             crc_reset <= 0;
+            out_xgmii_valid <= 1'b0;
         end else begin 
             if (in_xgmii_pcs_ready) begin
                 case (current_state)
@@ -185,6 +186,7 @@ module tx_mac #(
                         crc_reset <= 1'b1;
                         data_valid <= 1'b0;
                         fifo_rd_en <= 1'b0;
+                        out_xgmii_valid <= 1'b0;
                         if (in_slave_tx_tvalid && out_slave_tx_tready) begin		
                             current_state <= PREAMBLE_STATE;
                             out_xgmii_valid <= 1'b1;
