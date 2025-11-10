@@ -88,15 +88,18 @@ module mac #(
     ) tx_mac_inst (
         .tx_clk(mac_clk),
         .tx_rst(mac_rst),
+
         .in_slave_tx_tdata(tx_axis_tdata),
         .in_slave_tx_tkeep(tx_axis_tkeep),
         .in_slave_tx_tvalid(tx_axis_tvalid),
         .in_slave_tx_tlast(tx_axis_tlast),
         .out_slave_tx_tready(tx_axis_tready),
+
         .out_xgmii_data(xgmii_tx_data),
         .out_xgmii_ctl(xgmii_tx_ctl),
         .out_xgmii_valid(xgmii_tx_valid),
         .in_xgmii_pcs_ready(xgmii_tx_pcs_ready),
+
         .frame_valid(tx_frame_valid),
         .frame_error(tx_frame_error)
     );
@@ -109,14 +112,17 @@ module mac #(
     ) rx_mac_inst (
         .rx_clk(mac_clk),
         .rx_rst(mac_rst),
+
         .in_xgmii_data(xgmii_rx_data),
         .in_xgmii_ctl(xgmii_rx_ctl),
         .out_xgmii_pcs_ready(xgmii_rx_pcs_ready),
+
         .out_master_rx_tdata(rx_axis_tdata),
         .out_master_rx_tkeep(rx_axis_tkeep),
         .out_master_rx_tvalid(rx_axis_tvalid),
         .out_master_rx_tlast(rx_axis_tlast),
         .in_master_rx_tready(rx_axis_tready),
+        
         .frame_valid(rx_mac_frame_valid),
         .frame_error(rx_mac_frame_error),
         .crc_error(rx_mac_crc_error)
