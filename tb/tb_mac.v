@@ -1,61 +1,55 @@
 module tb_mac;
     parameter AXIS_DATA_WIDTH = 32;
     parameter AXIS_DATA_BYTES = AXIS_DATA_WIDTH / 8;
-    parameter xgmii_rx_data_WIDTH = 32;
-    parameter xgmii_rx_data_BYTES = xgmii_rx_data_WIDTH / 8;
-    
+    parameter XGMII_DATA_WIDTH = 32;
+    parameter XGMII_DATA_BYTES = XGMII_DATA_WIDTH / 8;
+
     reg mac_clk;
     reg mac_rst;
-    
-    wire [xgmii_rx_data_WIDTH-1:0] xgmii_tx_data;
-    wire [xgmii_rx_data_BYTES-1:0] xgmii_tx_ctl;
-    reg xgmii_tx_pcs_ready;
-    
-    reg [xgmii_rx_data_WIDTH-1:0] xgmii_rx_data;
-    reg [xgmii_rx_data_BYTES-1:0] xgmii_rx_ctl;
-    wire xgmii_rx_pcs_ready;
-    
-    reg [AXIS_DATA_WIDTH-1:0] tx_axis_tdata;
-    reg [AXIS_DATA_BYTES-1:0] tx_axis_tkeep;
-    reg tx_axis_tvalid;
-    reg tx_axis_tlast;
-    wire tx_axis_tready;
-    
-    wire [AXIS_DATA_WIDTH-1:0] rx_axis_tdata;
-    wire [AXIS_DATA_BYTES-1:0] rx_axis_tkeep;
-    wire rx_axis_tvalid;
-    wire rx_axis_tlast;
-    reg rx_axis_tready;
-    
+
+    wire [XGMII_DATA_WIDTH-1:0] xgmii_tx_data;
+    wire [XGMII_DATA_BYTES-1:0] xgmii_tx_ctl;
+    reg                            xgmii_tx_pcs_ready;
+
+    reg  [XGMII_DATA_WIDTH-1:0] xgmii_rx_data;
+    reg  [XGMII_DATA_BYTES-1:0] xgmii_rx_ctl;
+    wire                           xgmii_rx_pcs_ready;
+
+    reg  [AXIS_DATA_WIDTH-1:0]     tx_axis_tdata;
+    reg  [AXIS_DATA_BYTES-1:0]     tx_axis_tkeep;
+    reg                            tx_axis_tvalid;
+    reg                            tx_axis_tlast;
+    wire                           tx_axis_tready;
+
+    wire [AXIS_DATA_WIDTH-1:0]     rx_axis_tdata;
+    wire [AXIS_DATA_BYTES-1:0]     rx_axis_tkeep;
+    wire                           rx_axis_tvalid;
+    wire                           rx_axis_tlast;
+    reg                            rx_axis_tready;
+
     wire tx_frame_valid;
     wire tx_frame_error;
     wire rx_frame_valid;
     wire rx_frame_error;
     wire rx_crc_error;
-    wire [31:0] stat_tx_frames;
-    wire [31:0] stat_tx_bytes;
-    wire [31:0] stat_tx_errors;
-    wire [31:0] stat_rx_frames;
-    wire [31:0] stat_rx_bytes;
-    wire [31:0] stat_rx_errors;
-    wire [31:0] stat_rx_crc_errors;
 
-    localparam XGMII_IDLE = 8'h07;        
-    localparam XGMII_START = 8'hFB;     
-    localparam XGMII_TERMINATE = 8'hFD;   
-    localparam PREAMBLE_BYTE = 8'h55;    
-    localparam SFD_BYTE = 8'hD5;
-    
+
+    localparam XGMII_IDLE      = 8'h07;
+    localparam XGMII_START     = 8'hFB;
+    localparam XGMII_TERMINATE = 8'hFD;
+    localparam PREAMBLE_BYTE   = 8'h55;
+    localparam SFD_BYTE        = 8'hD5;
+
     initial begin
         mac_clk = 0;
+        forever #5 mac_clk = ~mac_clk;
     end
-    always #5 mac_clk = ~mac_clk; 
-    
+
     mac #(
         .AXIS_DATA_WIDTH(AXIS_DATA_WIDTH),
         .AXIS_DATA_BYTES(AXIS_DATA_BYTES),
-        .xgmii_rx_data_WIDTH(xgmii_rx_data_WIDTH),
-        .xgmii_rx_data_BYTES(xgmii_rx_data_BYTES),
+        .XGMII_DATA_WIDTH(XGMII_DATA_WIDTH),
+        .XGMII_DATA_BYTES(XGMII_DATA_BYTES),
         .LOCAL_MAC(48'hAA_BB_CC_DD_EE_FF),
         .DEFAULT_DEST_MAC(48'h00_11_22_33_44_55),
         .DEFAULT_ETHER_TYPE(16'h0800)
@@ -82,324 +76,216 @@ module tb_mac;
         .tx_frame_error(tx_frame_error),
         .rx_frame_valid(rx_frame_valid),
         .rx_frame_error(rx_frame_error),
-        .rx_crc_error(rx_crc_error),
-        .stat_tx_frames(stat_tx_frames),
-        .stat_tx_bytes(stat_tx_bytes),
-        .stat_tx_errors(stat_tx_errors),
-        .stat_rx_frames(stat_rx_frames),
-        .stat_rx_bytes(stat_rx_bytes),
-        .stat_rx_errors(stat_rx_errors),
-        .stat_rx_crc_errors(stat_rx_crc_errors)
+        .rx_crc_error(rx_crc_error)
     );
-    
-    initial begin
-        @(posedge mac_clk);
-        mac_rst = 1'b0;
-        xgmii_tx_pcs_ready = 1'b0;
-        xgmii_rx_data = {4{XGMII_IDLE}};
-        xgmii_rx_ctl = 4'b1111;
-        tx_axis_tdata = 32'h0;
-        tx_axis_tkeep = 4'b0000;
-        tx_axis_tvalid = 1'b0;
-        tx_axis_tlast = 1'b0;
-        rx_axis_tready = 1'b1;
-        
-        @(posedge mac_clk);
-        mac_rst = 1'b1;
-        xgmii_tx_pcs_ready = 1'b1;
-        
-        repeat(5) begin
+
+    task init_signals;
+        begin
+            mac_rst              = 1'b0;
+            xgmii_tx_pcs_ready   = 1'b0;
+
+            xgmii_rx_data        = {4{XGMII_IDLE}};
+            xgmii_rx_ctl         = 4'b1111;
+
+            tx_axis_tdata        = {AXIS_DATA_WIDTH{1'b0}};
+            tx_axis_tkeep        = {AXIS_DATA_BYTES{1'b0}};
+            tx_axis_tvalid       = 1'b0;
+            tx_axis_tlast        = 1'b0;
+
+            rx_axis_tready       = 1'b1;
+        end
+    endtask
+
+    task apply_reset;
+        begin
+            @(posedge mac_clk);
+            mac_rst = 1'b0;
+            repeat(2) @(posedge mac_clk);
+            mac_rst = 1'b1;
             @(posedge mac_clk);
         end
-        
-        // test tx and rx at the same time
-        //1        
-        wait (xgmii_tx_pcs_ready == 1'b1); 
-        @(posedge mac_clk); 
-        tx_axis_tdata = 32'hA1B2C3D4;
-        tx_axis_tkeep = 4'b1111;
-        tx_axis_tvalid = 1'b1;
-        tx_axis_tlast = 1'b0;
+    endtask
+
+    task send_tx_beat;
+        input [AXIS_DATA_WIDTH-1:0] data;
+        input [AXIS_DATA_BYTES-1:0] keep;
+        input last;
+        begin
+            @(posedge mac_clk);
+            tx_axis_tdata  = data;
+            tx_axis_tkeep  = keep;
+            tx_axis_tvalid = 1'b1;
+            tx_axis_tlast  = last;
+        end
+    endtask
+
+    task clear_tx;
+        begin
+            @(posedge mac_clk);
+            tx_axis_tdata  = {AXIS_DATA_WIDTH{1'b0}};
+            tx_axis_tkeep  = {AXIS_DATA_BYTES{1'b0}};
+            tx_axis_tvalid = 1'b0;
+            tx_axis_tlast  = 1'b0;
+        end
+    endtask
+
+    task send_rx_xgmii_beat;
+        input [XGMII_DATA_WIDTH-1:0] data;
+        input [XGMII_DATA_BYTES-1:0] ctl;
+        begin
+            @(posedge mac_clk);
+            xgmii_rx_data = data;
+            xgmii_rx_ctl  = ctl;
+        end
+    endtask
+
+    task send_rx_xgmii_idles;
+        begin
+            @(posedge mac_clk);
+            xgmii_rx_data = {4{XGMII_IDLE}};
+            xgmii_rx_ctl  = 4'b1111;
+        end
+    endtask
+
+    initial begin
+        init_signals();
+        apply_reset();
+
+        xgmii_tx_pcs_ready = 1'b1;
+
+        repeat (5) @(posedge mac_clk);
+
+        wait (xgmii_tx_pcs_ready == 1'b1);
+
+        send_tx_beat(32'hA1B2C3D4, 4'b1111, 1'b0);
         xgmii_rx_data = {PREAMBLE_BYTE, PREAMBLE_BYTE, PREAMBLE_BYTE, XGMII_START};
-        xgmii_rx_ctl = 4'b0001;
-        //2
-        @(posedge mac_clk); 
-        tx_axis_tdata = 32'h12345678;
-        tx_axis_tkeep = 4'b1111;
-        tx_axis_tvalid = 1'b1;
-        tx_axis_tlast = 1'b0;
+        xgmii_rx_ctl  = 4'b0001;
+
+        send_tx_beat(32'h12345678, 4'b1111, 1'b0);
         xgmii_rx_data = {SFD_BYTE, PREAMBLE_BYTE, PREAMBLE_BYTE, PREAMBLE_BYTE};
-        xgmii_rx_ctl = 4'b0000;
-        //3
-        @(posedge mac_clk); 
-        tx_axis_tdata = 32'hDEADBEEF;
-        tx_axis_tkeep = 4'b1111;
-        tx_axis_tvalid = 1'b1;
-        tx_axis_tlast = 1'b0;
-        xgmii_rx_data = 32'h33221100; 
-        xgmii_rx_ctl = 4'b0000;
-        //4
-        @(posedge mac_clk); 
-        tx_axis_tdata = 32'h87654321;
-        tx_axis_tkeep = 4'b1111;
-        tx_axis_tvalid = 1'b1;
-        tx_axis_tlast = 1'b0;
+        xgmii_rx_ctl  = 4'b0000;
+
+        send_tx_beat(32'hDEADBEEF, 4'b1111, 1'b0);
+        xgmii_rx_data = 32'h33221100;
+        xgmii_rx_ctl  = 4'b0000;
+
+        send_tx_beat(32'h87654321, 4'b1111, 1'b0);
         xgmii_rx_data = 32'hBBAA5544;
-        xgmii_rx_ctl = 4'b0000;
-        //5
-        @(posedge mac_clk); 
-        tx_axis_tdata = 32'hFEDCBA98;
-        tx_axis_tkeep = 4'b1111;
-        tx_axis_tvalid = 1'b1;
-        tx_axis_tlast = 1'b0;
+        xgmii_rx_ctl  = 4'b0000;
+
+        send_tx_beat(32'hFEDCBA98, 4'b1111, 1'b0);
         xgmii_rx_data = 32'hFFEEDDCC;
-        xgmii_rx_ctl = 4'b0000;
-        //6
-        @(posedge mac_clk); 
-        tx_axis_tdata = 32'h55AA33CC;
-        tx_axis_tkeep = 4'b1111;
-        tx_axis_tvalid = 1'b1;
-        tx_axis_tlast = 1'b0;
-        xgmii_rx_data = 32'h00000008; 
-        xgmii_rx_ctl = 4'b0000;
-        //7
-        @(posedge mac_clk); 
-        tx_axis_tdata = 32'h9F8E7D6C;
-        tx_axis_tkeep = 4'b1111;
-        tx_axis_tvalid = 1'b1;
-        tx_axis_tlast = 1'b0;
-        xgmii_rx_data = 32'hA1B2C3D4; 
-        xgmii_rx_ctl = 4'b0000;
-        //8
-        @(posedge mac_clk); 
-        tx_axis_tdata = 32'h1A2B3C4D;
-        tx_axis_tkeep = 4'b1111;
-        tx_axis_tvalid = 1'b1;
-        tx_axis_tlast = 1'b0;
-        xgmii_rx_data = 32'h12345678; 
-        xgmii_rx_ctl = 4'b0000;
-        //9
-        @(posedge mac_clk); 
-        tx_axis_tdata = 32'hCAFEBABE;
-        tx_axis_tkeep = 4'b1111;
-        tx_axis_tvalid = 1'b1;
-        tx_axis_tlast = 1'b0;
-        xgmii_rx_data = 32'hDEADBEEF; 
-        xgmii_rx_ctl = 4'b0000;
-        //10
-        @(posedge mac_clk); 
-        tx_axis_tdata = 32'h6789ABCD;
-        tx_axis_tkeep = 4'b1111;
-        tx_axis_tvalid = 1'b1;
-        tx_axis_tlast = 1'b0;
-        xgmii_rx_data = 32'h87654321; 
-        xgmii_rx_ctl = 4'b0000;
-        //11
-        @(posedge mac_clk); 
-        tx_axis_tdata = 32'hF0E1D2C3;
-        tx_axis_tkeep = 4'b1111;
-        tx_axis_tvalid = 1'b1;
-        tx_axis_tlast = 1'b0;
-        xgmii_rx_data = 32'hFEDCBA98; 
-        xgmii_rx_ctl = 4'b0000;
-        //12
-        @(posedge mac_clk); 
-        tx_axis_tdata = 32'h3E5F7A9B;
-        tx_axis_tkeep = 4'b1111;
-        tx_axis_tvalid = 1'b1;
-        tx_axis_tlast = 1'b1;
-        xgmii_rx_data = 32'h55AA33CC; 
-        xgmii_rx_ctl = 4'b0000;
-        @(posedge mac_clk);
-        tx_axis_tdata = 0;
-        tx_axis_tkeep = 0;
-        tx_axis_tvalid = 0;
-        tx_axis_tlast = 0;
-        xgmii_rx_data = 32'h9F8E7D6C; 
-        xgmii_rx_ctl = 4'b0000;
+        xgmii_rx_ctl  = 4'b0000;
 
-//8
-        @(posedge mac_clk);
-        xgmii_rx_data = 32'h1A2B3C4D; 
-        xgmii_rx_ctl = 4'b0000;
-        //9
-        @(posedge mac_clk);
-        xgmii_rx_data = 32'hCAFEBABE; 
-        xgmii_rx_ctl = 4'b0000;
-        //10
-        @(posedge mac_clk);
-        xgmii_rx_data = 32'h6789ABCD; 
-        xgmii_rx_ctl = 4'b0000;
-        //11
-        @(posedge mac_clk);
-        xgmii_rx_data = 32'hF0E1D2C3; 
-        xgmii_rx_ctl = 4'b0000;
-        //12
-        @(posedge mac_clk);
-        xgmii_rx_data = 32'h3E5F7A9B; 
-        xgmii_rx_ctl = 4'b0000;
-        //CRC
-        @(posedge mac_clk);
-        xgmii_rx_data = 32'h0f0821ee; 
-        xgmii_rx_ctl = 4'b0000;
-        
-        @(posedge mac_clk);
-        xgmii_rx_data = {XGMII_TERMINATE, {3{XGMII_IDLE}}};
-        xgmii_rx_ctl = 4'b1111;
-        
-        @(posedge mac_clk);
-        xgmii_rx_data = {4{XGMII_IDLE}};
-        xgmii_rx_ctl = 4'b1111;
+        send_tx_beat(32'h55AA33CC, 4'b1111, 1'b0);
+        xgmii_rx_data = 32'h00000008;
+        xgmii_rx_ctl  = 4'b0000;
 
-        // second
-                //1        
-        wait (xgmii_tx_pcs_ready == 1'b1); 
-        @(posedge mac_clk); 
-        tx_axis_tdata = 32'hA1B2C3D4;
-        tx_axis_tkeep = 4'b1111;
-        tx_axis_tvalid = 1'b1;
-        tx_axis_tlast = 1'b0;
+        send_tx_beat(32'h9F8E7D6C, 4'b1111, 1'b0);
+        xgmii_rx_data = 32'hA1B2C3D4;
+        xgmii_rx_ctl  = 4'b0000;
+
+        send_tx_beat(32'h1A2B3C4D, 4'b1111, 1'b0);
+        xgmii_rx_data = 32'h12345678;
+        xgmii_rx_ctl  = 4'b0000;
+
+        send_tx_beat(32'hCAFEBABE, 4'b1111, 1'b0);
+        xgmii_rx_data = 32'hDEADBEEF;
+        xgmii_rx_ctl  = 4'b0000;
+
+        send_tx_beat(32'h6789ABCD, 4'b1111, 1'b0);
+        xgmii_rx_data = 32'h87654321;
+        xgmii_rx_ctl  = 4'b0000;
+
+        send_tx_beat(32'hF0E1D2C3, 4'b1111, 1'b0);
+        xgmii_rx_data = 32'hFEDCBA98;
+        xgmii_rx_ctl  = 4'b0000;
+
+        send_tx_beat(32'h3E5F7A9B, 4'b1111, 1'b1);
+        xgmii_rx_data = 32'h55AA33CC;
+        xgmii_rx_ctl  = 4'b0000;
+
+        clear_tx();
+        xgmii_rx_data = 32'h9F8E7D6C;
+        xgmii_rx_ctl  = 4'b0000;
+
+        send_rx_xgmii_beat(32'h1A2B3C4D, 4'b0000); // 8
+        send_rx_xgmii_beat(32'hCAFEBABE, 4'b0000); // 9
+        send_rx_xgmii_beat(32'h6789ABCD, 4'b0000); // 10
+        send_rx_xgmii_beat(32'hF0E1D2C3, 4'b0000); // 11
+        send_rx_xgmii_beat(32'h3E5F7A9B, 4'b0000); // 12
+        send_rx_xgmii_beat(32'h0F0821EE, 4'b0000); // CRC
+
+        send_rx_xgmii_beat({XGMII_TERMINATE, {3{XGMII_IDLE}}}, 4'b1111);
+        send_rx_xgmii_idles();
+
+        wait (xgmii_tx_pcs_ready == 1'b1);
+
+        send_tx_beat(32'hA1B2C3D4, 4'b1111, 1'b0);
         xgmii_rx_data = {PREAMBLE_BYTE, PREAMBLE_BYTE, PREAMBLE_BYTE, XGMII_START};
-        xgmii_rx_ctl = 4'b0001;
-        //2
-        @(posedge mac_clk); 
-        tx_axis_tdata = 32'h12345678;
-        tx_axis_tkeep = 4'b1111;
-        tx_axis_tvalid = 1'b1;
-        tx_axis_tlast = 1'b0;
+        xgmii_rx_ctl  = 4'b0001;
+
+        send_tx_beat(32'h12345678, 4'b1111, 1'b0);
         xgmii_rx_data = {SFD_BYTE, PREAMBLE_BYTE, PREAMBLE_BYTE, PREAMBLE_BYTE};
-        xgmii_rx_ctl = 4'b0000;
-        //3
-        @(posedge mac_clk); 
-        tx_axis_tdata = 32'hDEADBEEF;
-        tx_axis_tkeep = 4'b1111;
-        tx_axis_tvalid = 1'b1;
-        tx_axis_tlast = 1'b0;
-        xgmii_rx_data = 32'h33221100; 
-        xgmii_rx_ctl = 4'b0000;
-        //4
-        @(posedge mac_clk); 
-        tx_axis_tdata = 32'h87654321;
-        tx_axis_tkeep = 4'b1111;
-        tx_axis_tvalid = 1'b1;
-        tx_axis_tlast = 1'b0;
+        xgmii_rx_ctl  = 4'b0000;
+
+        send_tx_beat(32'hDEADBEEF, 4'b1111, 1'b0);
+        xgmii_rx_data = 32'h33221100;
+        xgmii_rx_ctl  = 4'b0000;
+
+        send_tx_beat(32'h87654321, 4'b1111, 1'b0);
         xgmii_rx_data = 32'hBBAA5544;
-        xgmii_rx_ctl = 4'b0000;
-        //5
-        @(posedge mac_clk); 
-        tx_axis_tdata = 32'hFEDCBA98;
-        tx_axis_tkeep = 4'b1111;
-        tx_axis_tvalid = 1'b1;
-        tx_axis_tlast = 1'b0;
+        xgmii_rx_ctl  = 4'b0000;
+
+        send_tx_beat(32'hFEDCBA98, 4'b1111, 1'b0);
         xgmii_rx_data = 32'hFFEEDDCC;
-        xgmii_rx_ctl = 4'b0000;
-        //6
-        @(posedge mac_clk); 
-        tx_axis_tdata = 32'h55AA33CC;
-        tx_axis_tkeep = 4'b1111;
-        tx_axis_tvalid = 1'b1;
-        tx_axis_tlast = 1'b0;
-        xgmii_rx_data = 32'h00000008; 
-        xgmii_rx_ctl = 4'b0000;
-        //7
-        @(posedge mac_clk); 
-        tx_axis_tdata = 32'h9F8E7D6C;
-        tx_axis_tkeep = 4'b1111;
-        tx_axis_tvalid = 1'b1;
-        tx_axis_tlast = 1'b0;
-        xgmii_rx_data = 32'hA1B2C3D4; 
-        xgmii_rx_ctl = 4'b0000;
-        //8
-        @(posedge mac_clk); 
-        tx_axis_tdata = 32'h1A2B3C4D;
-        tx_axis_tkeep = 4'b1111;
-        tx_axis_tvalid = 1'b1;
-        tx_axis_tlast = 1'b0;
-        xgmii_rx_data = 32'h12345678; 
-        xgmii_rx_ctl = 4'b0000;
-        //9
-        @(posedge mac_clk); 
-        tx_axis_tdata = 32'hCAFEBABE;
-        tx_axis_tkeep = 4'b1111;
-        tx_axis_tvalid = 1'b1;
-        tx_axis_tlast = 1'b0;
-        xgmii_rx_data = 32'hDEADBEEF; 
-        xgmii_rx_ctl = 4'b0000;
-        //10
-        @(posedge mac_clk); 
-        tx_axis_tdata = 32'h6789ABCD;
-        tx_axis_tkeep = 4'b1111;
-        tx_axis_tvalid = 1'b1;
-        tx_axis_tlast = 1'b0;
-        xgmii_rx_data = 32'h87654321; 
-        xgmii_rx_ctl = 4'b0000;
-        //11
-        @(posedge mac_clk); 
-        tx_axis_tdata = 32'hF0E1D2C3;
-        tx_axis_tkeep = 4'b1111;
-        tx_axis_tvalid = 1'b1;
-        tx_axis_tlast = 1'b0;
-        xgmii_rx_data = 32'hFEDCBA98; 
-        xgmii_rx_ctl = 4'b0000;
-        //12
-        @(posedge mac_clk); 
-        tx_axis_tdata = 32'h3E5F7A9B;
-        tx_axis_tkeep = 4'b1111;
-        tx_axis_tvalid = 1'b1;
-        tx_axis_tlast = 1'b1;
-        xgmii_rx_data = 32'h55AA33CC; 
-        xgmii_rx_ctl = 4'b0000;
-        @(posedge mac_clk);
-        tx_axis_tdata = 0;
-        tx_axis_tkeep = 0;
-        tx_axis_tvalid = 0;
-        tx_axis_tlast = 0;
-        xgmii_rx_data = 32'h9F8E7D6C; 
-        xgmii_rx_ctl = 4'b0000;
+        xgmii_rx_ctl  = 4'b0000;
 
-        //8
-        @(posedge mac_clk);
-        xgmii_rx_data = 32'h1A2B3C4D; 
-        xgmii_rx_ctl = 4'b0000;
-        //9
-        @(posedge mac_clk);
-        xgmii_rx_data = 32'hCAFEBABE; 
-        xgmii_rx_ctl = 4'b0000;
-        //10
-        @(posedge mac_clk);
-        xgmii_rx_data = 32'h6789ABCD; 
-        xgmii_rx_ctl = 4'b0000;
-        //11
-        @(posedge mac_clk);
-        xgmii_rx_data = 32'hF0E1D2C3; 
-        xgmii_rx_ctl = 4'b0000;
-        //12
-        @(posedge mac_clk);
-        xgmii_rx_data = 32'h3E5F7A9B; 
-        xgmii_rx_ctl = 4'b0000;
-        //CRC
-        @(posedge mac_clk);
-        xgmii_rx_data = 32'h0f0821ee; 
-        xgmii_rx_ctl = 4'b0000;
-        
-        @(posedge mac_clk);
-        xgmii_rx_data = {XGMII_TERMINATE, {3{XGMII_IDLE}}};
-        xgmii_rx_ctl = 4'b1111;
-        
-        @(posedge mac_clk);
-        xgmii_rx_data = {4{XGMII_IDLE}};
-        xgmii_rx_ctl = 4'b1111;
-                
-        wait (xgmii_tx_pcs_ready == 1'b1); 
-        @(posedge mac_clk);
+        send_tx_beat(32'h55AA33CC, 4'b1111, 1'b0);
+        xgmii_rx_data = 32'h00000008;
+        xgmii_rx_ctl  = 4'b0000;
 
-        tx_axis_tvalid = 1'b0;
-        tx_axis_tlast = 1'b0;
-        
-        
-        #500; 
+        send_tx_beat(32'h9F8E7D6C, 4'b1111, 1'b0);
+        xgmii_rx_data = 32'hA1B2C3D4;
+        xgmii_rx_ctl  = 4'b0000;
+
+        send_tx_beat(32'h1A2B3C4D, 4'b1111, 1'b0);
+        xgmii_rx_data = 32'h12345678;
+        xgmii_rx_ctl  = 4'b0000;
+
+        send_tx_beat(32'hCAFEBABE, 4'b1111, 1'b0);
+        xgmii_rx_data = 32'hDEADBEEF;
+        xgmii_rx_ctl  = 4'b0000;
+
+        send_tx_beat(32'h6789ABCD, 4'b1111, 1'b0);
+        xgmii_rx_data = 32'h87654321;
+        xgmii_rx_ctl  = 4'b0000;
+
+        send_tx_beat(32'hF0E1D2C3, 4'b1111, 1'b0);
+        xgmii_rx_data = 32'hFEDCBA98;
+        xgmii_rx_ctl  = 4'b0000;
+
+        send_tx_beat(32'h3E5F7A9B, 4'b1111, 1'b1);
+        xgmii_rx_data = 32'h55AA33CC;
+        xgmii_rx_ctl  = 4'b0000;
+
+        clear_tx();
+        xgmii_rx_data = 32'h9F8E7D6C;
+        xgmii_rx_ctl  = 4'b0000;
+
+        send_rx_xgmii_beat(32'h1A2B3C4D, 4'b0000); // 8
+        send_rx_xgmii_beat(32'hCAFEBABE, 4'b0000); // 9
+        send_rx_xgmii_beat(32'h6789ABCD, 4'b0000); // 10
+        send_rx_xgmii_beat(32'hF0E1D2C3, 4'b0000); // 11
+        send_rx_xgmii_beat(32'h3E5F7A9B, 4'b0000); // 12
+        send_rx_xgmii_beat(32'h0F0821EE, 4'b0000); // CRC
+
+        send_rx_xgmii_beat({XGMII_TERMINATE, {3{XGMII_IDLE}}}, 4'b1111);
+        send_rx_xgmii_idles();
+
+        repeat (50) @(posedge mac_clk);
+
         $finish;
     end
-    
-endmodule
 
+endmodule
