@@ -2,6 +2,7 @@ module tb_decoder();
     parameter PCS_DATA_WIDTH = 64;
     parameter XGMII_DATA_WIDTH = 32;
     parameter XGMII_DATA_BYTES = XGMII_DATA_WIDTH/8;
+    
     reg clk;
     reg rst;
     
@@ -16,9 +17,8 @@ module tb_decoder();
     
     initial begin
         clk = 0;
+        forever #5 clk = ~clk;
     end
-    
-    always #5 clk = ~clk; 
     
     decoder #(
         .XGMII_DATA_WIDTH(XGMII_DATA_WIDTH),
@@ -36,44 +36,61 @@ module tb_decoder();
         .in_xgmii_ready(xgmii_ready_in)
     );
     
+    task init_signals;
+        begin
+            rst = 1'b0;
+            encoded_data_in = 0;
+            encoded_header_in = 0;
+            encoded_valid_in = 0;
+            xgmii_ready_in = 0;
+        end
+    endtask
+    
+    task apply_reset;
+        begin
+            @(posedge clk);
+            rst = 1'b0;
+            repeat(2) @(posedge clk);
+            rst = 1'b1;
+            @(posedge clk);
+        end
+    endtask
+    
+    task send_block;
+        input [PCS_DATA_WIDTH-1:0] data;
+        input [1:0] header;
+        begin
+            @(posedge clk);
+            encoded_data_in = data;
+            encoded_header_in = header;
+            encoded_valid_in = 1'b1;
+            xgmii_ready_in = 1'b1;
+            @(posedge clk);
+            encoded_valid_in = 1'b0; 
+        end        
+    endtask
+    
     initial begin
-        @(posedge clk);
-        rst = 1'b0;
-        @(posedge clk);
-        
-        // Test 3 cases: SYNC_DATA, BLOCK_TYPE_S0, and BLOCK_TYPE_T4
-        rst = 1'b1;
-        @(posedge clk);
-        encoded_data_in = 64'h78D5555555555555;
-        encoded_header_in = 2'b10; // SYNC_DATA
-        encoded_valid_in = 1;
-        xgmii_ready_in = 1;
-        
-        @(posedge clk);
-        @(posedge clk);
-        encoded_data_in = 64'hBBAA554433221100;
-        encoded_header_in = 2'b01; // BLOCK_TYPE_S0
-        encoded_valid_in = 1;
-        xgmii_ready_in = 1;
-        
-        @(posedge clk);
-        @(posedge clk);
-        encoded_data_in = 64'hCC713B28B2070707;
-        encoded_header_in = 2'b01; // BLOCK_TYPE_T4
-        encoded_valid_in = 1;
-        xgmii_ready_in = 1;
-        
-        @(posedge clk);
-        xgmii_ready_in = 1;
-        
-        @(posedge clk);
-        encoded_data_in = 0;
-        encoded_header_in = 0; 
-        encoded_valid_in = 0;
-        xgmii_ready_in = 0;
-        
-        repeat(5) @(posedge clk);
-        
+        init_signals();
+        apply_reset();
+
+        send_block(64'h0123456789ABCDEF, 2'b01);
+        send_block(64'h1E55555555555555, 2'b10);
+        send_block(64'h78D5555555555555, 2'b10);
+        send_block(64'h33AABBCCDD112233, 2'b10);
+        send_block(64'h8700000000000000, 2'b10);
+        send_block(64'h99AA000000000000, 2'b10);
+        send_block(64'hAAABCD0000000000, 2'b10);
+        send_block(64'hB4ABCDEF00000000, 2'b10);
+        send_block(64'hCCABCDEF12000000, 2'b10);
+        send_block(64'hD2ABCDEF12340000, 2'b10);
+        send_block(64'hE1ABCDEF12345600, 2'b10);
+        send_block(64'hFFABCDEF12345678, 2'b10);
+        send_block(64'h5555555555555555, 2'b10);
+        send_block(64'h0123456789ABCDEF, 2'b11);
+         
+        #100;
         $finish;
     end
+    
 endmodule
