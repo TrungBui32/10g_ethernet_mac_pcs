@@ -57,9 +57,16 @@ module tb_scrambler();
         init_signals();
         apply_reset();
 
-        send_word(64'h78D5_5555_5555_5555);
-        send_word(64'hBBAA_5544_3322_1100);
-        send_word(64'hCC71_3B28_B207_0707);
+        send_word(64'h78d5555555555555); //7b2aaad555555555
+        send_word(64'hbbaa554433221100); //46ff004433221100
+        send_word(64'h00000008ffeeddcc); //92f77f88ffeeddcc
+        send_word(64'h12345678a1b2c3d4); //d6a54ff8a1b2c3d4
+        send_word(64'h87654321deadbeef); //0dfb56a1deadbeef
+        send_word(64'h55aa33ccfedcba98); //bc8abbccfedcba98
+        send_word(64'h1a2b3c4d9f8e7d6c); //17898fcd9f8e7d6c
+        send_word(64'h6789abcdcafebabe); //1348e24dcafebabe
+        send_word(64'h3e5f7a9bf0e1d2c3); //bafdda1bf0e1d2c3
+        send_word(64'hcc713b28b2070707); //b367a528b2070707
 
         repeat(4) @(posedge clk);
         
