@@ -47,27 +47,11 @@ module top #(
     output rx_frame_error,
     output rx_crc_error
 );
-
-    reg internal_rst;
-    reg [3:0] reset_counter;
-    
-    always @(posedge sys_clk or negedge sys_rst_n) begin
-        if (!sys_rst_n) begin
-            reset_counter <= 4'hF;
-            internal_rst <= (RESET_POLARITY == 1'b0) ? 1'b0 : 1'b1;
-        end else begin
-            if (reset_counter != 4'h0) begin
-                reset_counter <= reset_counter - 1;
-                internal_rst <= (RESET_POLARITY == 1'b0) ? 1'b0 : 1'b1;
-            end else begin
-                internal_rst <= (RESET_POLARITY == 1'b0) ? 1'b1 : 1'b0;
-            end
-        end
-    end
     
     wire [XGMII_DATA_WIDTH-1:0] xgmii_tx_data;
     wire [XGMII_DATA_BYTES-1:0] xgmii_tx_ctrl;
     wire xgmii_tx_ready;
+    wire xgmii_tx_valid;
     
     wire [XGMII_DATA_WIDTH-1:0] xgmii_rx_data;
     wire [XGMII_DATA_BYTES-1:0] xgmii_rx_ctrl;
@@ -87,14 +71,15 @@ module top #(
         .DEFAULT_ETHER_TYPE(DEFAULT_ETHER_TYPE)
     ) mac_inst (
         .mac_clk(sys_clk),
-        .mac_rst(internal_rst),
+        .mac_rst(sys_rst_n),
         
         .xgmii_tx_data(xgmii_tx_data),
         .xgmii_tx_ctl(xgmii_tx_ctrl),
-        .xgmii_tx_pcs_ready(xgmii_tx_ready),
+        .xgmii_tx_pcs_ready(1'b1),
         
         .xgmii_rx_data(xgmii_rx_data),
         .xgmii_rx_ctl(xgmii_rx_ctrl),
+        .xgmii_tx_valid(xgmii_tx_valid),
         .xgmii_rx_pcs_ready(xgmii_rx_ready),
         
         .tx_axis_tdata(user_tx_axis_tdata),
@@ -122,10 +107,11 @@ module top #(
         .PCS_DATA_WIDTH(PCS_DATA_WIDTH)
     ) pcs_inst (
         .pcs_clk(sys_clk),
-        .pcs_rst(internal_rst),
+        .pcs_rst(sys_rst_n),
         
         .in_tx_xgmii_data(xgmii_tx_data),
         .in_tx_xgmii_ctl(xgmii_tx_ctrl),
+        .in_tx_xgmii_valid(xgmii_tx_valid),
         
         .tx_pcs_data(phy_tx_data),
         .tx_pcs_data_valid(phy_tx_valid),
