@@ -1,11 +1,12 @@
 module tb_decoder();
-    parameter PCS_DATA_WIDTH = 66;
+    parameter PCS_DATA_WIDTH = 64;
     parameter XGMII_DATA_WIDTH = 32;
     parameter XGMII_DATA_BYTES = XGMII_DATA_WIDTH/8;
     reg clk;
     reg rst;
     
     reg [PCS_DATA_WIDTH-1:0] encoded_data_in;
+    reg [1:0] encoded_header_in;
     reg encoded_valid_in;
     
     wire [XGMII_DATA_WIDTH-1:0] xgmii_data_out;
@@ -26,12 +27,13 @@ module tb_decoder();
     ) dut (
         .clk(clk),
         .rst(rst),
-        .encoded_data_in(encoded_data_in),
-        .encoded_valid_in(encoded_valid_in),
-        .xgmii_data_out(xgmii_data_out),
-        .xgmii_ctrl_out(xgmii_ctrl_out),
-        .xgmii_valid_out(xgmii_valid_out),
-        .xgmii_ready_in(xgmii_ready_in)
+        .in_encoded_data(encoded_data_in),
+        .in_encoded_header(encoded_header_in),
+        .in_encoded_valid(encoded_valid_in),
+        .out_xgmii_data(xgmii_data_out),
+        .out_xgmii_ctl(xgmii_ctrl_out),
+        .out_xgmii_valid(xgmii_valid_out),
+        .in_xgmii_ready(xgmii_ready_in)
     );
     
     initial begin
@@ -42,19 +44,22 @@ module tb_decoder();
         // Test 3 cases: SYNC_DATA, BLOCK_TYPE_S0, and BLOCK_TYPE_T4
         rst = 1'b1;
         @(posedge clk);
-        encoded_data_in = 66'h278d5555555555555;
+        encoded_data_in = 64'h78D5555555555555;
+        encoded_header_in = 2'b10; // SYNC_DATA
         encoded_valid_in = 1;
         xgmii_ready_in = 1;
         
         @(posedge clk);
         @(posedge clk);
-        encoded_data_in = 66'h1bbaa554433221100;
+        encoded_data_in = 64'hBBAA554433221100;
+        encoded_header_in = 2'b01; // BLOCK_TYPE_S0
         encoded_valid_in = 1;
         xgmii_ready_in = 1;
         
         @(posedge clk);
         @(posedge clk);
-        encoded_data_in = 66'h2cc713b28b2070707;
+        encoded_data_in = 64'hCC713B28B2070707;
+        encoded_header_in = 2'b01; // BLOCK_TYPE_T4
         encoded_valid_in = 1;
         xgmii_ready_in = 1;
         
@@ -62,6 +67,9 @@ module tb_decoder();
         xgmii_ready_in = 1;
         
         @(posedge clk);
+        encoded_data_in = 0;
+        encoded_header_in = 0; 
+        encoded_valid_in = 0;
         xgmii_ready_in = 0;
         
         repeat(5) @(posedge clk);
