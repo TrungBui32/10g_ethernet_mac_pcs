@@ -1,24 +1,4 @@
 `timescale 1ns / 1ps
-//////////////////////////////////////////////////////////////////////////////////
-// Company: 
-// Engineer: 
-// 
-// Create Date: 09/15/2025 07:59:28 PM
-// Design Name: 
-// Module Name: tb_tx_mac
-// Project Name: 
-// Target Devices: 
-// Tool Versions: 
-// Description: 
-// 
-// Dependencies: 
-// 
-// Revision:
-// Revision 0.01 - File Created
-// Additional Comments:
-// 
-//////////////////////////////////////////////////////////////////////////////////
-
 
 module tb_tx_mac;
 
@@ -38,6 +18,7 @@ module tb_tx_mac;
 
     wire [XGMII_DATA_WIDTH-1:0] out_xgmii_data;
     wire [XGMII_DATA_BYTES-1:0] out_xgmii_ctl;
+    wire out_xgmii_valid;
     reg in_xgmii_pcs_ready;
     
     initial begin
@@ -62,6 +43,7 @@ module tb_tx_mac;
 
         .out_xgmii_data(out_xgmii_data),
         .out_xgmii_ctl(out_xgmii_ctl),
+        .out_xgmii_valid(out_xgmii_valid),
         .in_xgmii_pcs_ready(in_xgmii_pcs_ready)
     );
 
